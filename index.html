@@ -403,9 +403,8 @@ let DB = {
 };
 
 // ─── SUPABASE ─────────────────────────────────────────────────────────────────
-// Rellenar con los datos de tu proyecto Supabase para Shirake
-const SB_URL = '';
-const SB_KEY = '';
+const SB_URL = 'https://civblohkumiqpofhodah.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpdmJsb2hrdW1pcXBvZmhvZGFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MDQzMTUsImV4cCI6MjA5NzI4MDMxNX0.dwO9-9Y-j-k5okgX14wamgfUH4njPVdmJ1wnrO2zysE';
 const SB_HDR = {'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'return=representation'};
 
 async function sbGet(t){
