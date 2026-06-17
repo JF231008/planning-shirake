@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planning Shirake</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍄</text></svg>">
+<style>
+:root{
+  --pri:#c4714a;--pri-l:#fdf0e8;--pri-h:#a85c3a;
+  --bg:#fdf8f3;--bg2:#faf4ee;--sur:#fff;--brd:#ede6dc;
+  --txt:#2a1a0e;--txt2:#8a7060;
+  --ok-bg:#eef6ea;--ok-txt:#2d5a22;--ok-brd:#b8dba0;
+  --wn-bg:#fef5e4;--wn-txt:#7a4a10;--wn-brd:#f0d090;
+  --al-bg:#fdf0ee;--al-txt:#7a2a1e;--al-brd:#f0b0a0;
+  --mv-bg:#f5edf8;--mv-txt:#6a3080;--mv-brd:#d8b8e8;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);font-size:14px}
+.topbar{background:var(--sur);border-bottom:1px solid var(--brd);padding:0 20px;display:flex;align-items:center;justify-content:space-between;height:52px;position:sticky;top:0;z-index:100;box-shadow:0 1px 4px rgba(80,30,0,.07)}
+.topbar h1{font-size:17px;font-weight:700;display:flex;align-items:center;gap:8px;color:var(--pri)}
+.nav{display:flex;gap:2px;margin-left:20px}
+.nav-btn{padding:6px 14px;border:none;background:none;font-size:13px;color:var(--txt2);cursor:pointer;border-radius:6px;transition:all .15s;display:flex;align-items:center;gap:5px}
+.nav-btn:hover{background:var(--pri-l);color:var(--txt)}
+.nav-btn.on{background:var(--pri);color:#fff;font-weight:500}
+.nav-btn .cnt{background:#e24b4a;color:#fff;border-radius:99px;font-size:10px;padding:1px 5px}
+.main{padding:20px;max-width:1400px;margin:0 auto}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:20px}
+.mc{background:var(--sur);border-radius:12px;padding:12px 14px;border:1px solid var(--brd)}
+.mc-l{font-size:11px;color:var(--txt2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px}
+.mc-v{font-size:24px;font-weight:600}
+.page{display:none}.page.on{display:block}
+.toolbar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+.toolbar input,.toolbar select{font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid var(--brd);background:var(--sur);color:var(--txt);height:34px;outline:none}
+.toolbar input:focus,.toolbar select:focus{border-color:var(--pri)}
+.toolbar input{min-width:200px}
+.btn{height:34px;padding:0 14px;border-radius:8px;border:1px solid var(--brd);background:var(--sur);color:var(--txt);font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .12s;white-space:nowrap;font-family:inherit}
+.btn:hover{background:var(--bg2)}
+.btn.p{background:var(--pri);color:#fff;border-color:var(--pri)}
+.btn.p:hover{background:var(--pri-h)}
+.btn.sm{height:28px;padding:0 10px;font-size:12px}
+.btn.danger{color:#a32d2d;border-color:#f09595}
+.btn.danger:hover{background:#fcebeb}
+.btn.ok{background:var(--ok-bg);color:var(--ok-txt);border-color:var(--ok-brd)}
+.btn.ok:hover{background:#d4e9bc}
+.btn.wa{background:#25D366;color:#fff;border-color:#1da851}
+.btn.wa:hover{background:#1aad56}
+.btn.entrada{background:var(--ok-bg);color:var(--ok-txt);border-color:var(--ok-brd)}
+.btn.entrada:hover{background:#d4e9bc}
+.btn.salida{background:var(--al-bg);color:var(--al-txt);border-color:var(--al-brd)}
+.btn.salida:hover{background:#f8d8d0}
+.tw{overflow-x:auto;background:var(--sur);border:1px solid var(--brd);border-radius:10px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--bg2);color:var(--txt2);font-weight:500;padding:9px 11px;text-align:left;border-bottom:1px solid var(--brd);white-space:nowrap;cursor:pointer;user-select:none;font-size:12px}
+th:hover{color:var(--txt)}
+td{padding:9px 11px;border-bottom:1px solid #f5f0ea;color:var(--txt);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--bg2)}
+.bdg{display:inline-flex;align-items:center;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:500;white-space:nowrap;cursor:pointer;border:none;font-family:inherit}
+.bdg.c{background:var(--ok-bg);color:var(--ok-txt)}
+.bdg.p{background:var(--wn-bg);color:var(--wn-txt)}
+.bdg.s{background:var(--al-bg);color:var(--al-txt)}
+.bdg:hover{opacity:.85}
+.pbdg{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:500;white-space:nowrap}
+.pbdg-1{background:var(--wn-bg);color:var(--wn-txt)}
+.pbdg-2{background:var(--pri-l);color:var(--pri-h)}
+.pbdg-3{background:var(--mv-bg);color:var(--mv-txt)}
+.pbdg-4{background:var(--ok-bg);color:var(--ok-txt)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.card{background:var(--sur);border:1px solid var(--brd);border-radius:12px;padding:14px}
+.card-dashed{border-style:dashed;cursor:pointer;display:flex;align-items:center;justify-content:center;min-height:90px;color:var(--txt2);font-size:13px;gap:6px}
+.card-dashed:hover{background:var(--pri-l)}
+.card-name{font-size:13px;font-weight:600;margin-bottom:2px}
+.card-sub{font-size:11px;color:var(--txt2)}
+.card-row{font-size:12px;color:var(--txt2);margin-top:5px}
+.avatar{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex-shrink:0}
+.av-b{background:#fdf0e8;color:#904020}
+.av-g{background:#eef6ea;color:#2d5a22}
+.pill{display:inline-flex;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:500}
+.empty{text-align:center;padding:2rem;color:var(--txt2);font-size:13px}
+.rcount{font-size:11px;color:var(--txt2);margin-top:6px}
+.totals-row td{font-weight:600;background:var(--bg2);border-top:1px solid var(--brd)}
+/* Overlay / Modal */
+.ov{position:fixed;inset:0;background:rgba(40,15,5,.45);z-index:200;display:flex;align-items:flex-start;justify-content:center;padding-top:30px}
+.modal{background:var(--sur);border-radius:14px;border:1px solid var(--brd);padding:20px;width:640px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 30px rgba(80,30,0,.18)}
+.modal-title{font-size:16px;font-weight:600;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fgf{grid-column:1/-1}
+.fl{display:flex;flex-direction:column;gap:4px}
+.fl label{font-size:11px;color:var(--txt2);font-weight:500;text-transform:uppercase;letter-spacing:.3px}
+.fl input,.fl select,.fl textarea{font-size:13px;padding:7px 10px;border-radius:8px;border:1px solid var(--brd);background:var(--sur);color:var(--txt);font-family:inherit;outline:none}
+.fl input:focus,.fl select:focus,.fl textarea:focus{border-color:var(--pri)}
+.fl textarea{resize:vertical;min-height:56px}
+.mbt{display:flex;gap:8px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap}
+.sec-title{font-size:13px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.alert-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--brd);border-radius:8px;margin-bottom:8px;background:var(--sur)}
+.alert-item.urg{border-color:var(--al-brd);background:var(--al-bg)}
+.alert-item.wn{border-color:var(--wn-brd);background:var(--wn-bg)}
+/* Proceso tracker */
+.proc-track{display:flex;align-items:center;margin-bottom:16px;background:var(--pri-l);border:1px solid #f0c8a8;border-radius:10px;padding:12px 14px}
+.proc-step{display:flex;flex-direction:column;align-items:center;gap:4px;flex:0 0 auto;min-width:62px;opacity:.28;transition:all .2s;cursor:pointer;border-radius:8px;padding:6px 8px;border:2px solid transparent}
+.proc-step.done,.proc-step.active{opacity:1}
+.proc-step.active{background:#fff3e8;border-color:#f0a878}
+.proc-step.done{opacity:.7}
+.proc-ico{font-size:22px;line-height:1}
+.proc-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2);text-align:center}
+.proc-conn{flex:1;height:2px;background:var(--brd);margin:0 4px;margin-bottom:10px}
+.proc-conn.done{background:var(--pri)}
+.msec{margin-top:16px;padding-top:14px;border-top:1px solid var(--brd)}
+.msec-title{font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+/* Stock cards */
+.stock-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.scard{background:var(--sur);border:1px solid var(--brd);border-radius:14px;padding:16px;position:relative;overflow:hidden}
+.scard::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;border-radius:14px 14px 0 0}
+.scard.ok::before{background:var(--ok-brd)}
+.scard.low::before{background:var(--wn-brd)}
+.scard.crit::before{background:var(--al-brd)}
+.scard-name{font-size:14px;font-weight:600;margin-bottom:2px;margin-top:4px}
+.scard-gama{font-size:11px;color:var(--txt2);margin-bottom:12px}
+.scard-cajas{font-size:34px;font-weight:700;line-height:1;margin-bottom:4px}
+.scard-min{font-size:11px;color:var(--txt2)}
+.scard-actions{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}
+/* Mobile cards */
+.vcards-mobile{display:none;flex-direction:column;gap:10px}
+.vcard{background:var(--sur);border:1px solid var(--brd);border-radius:12px;padding:14px;box-shadow:0 1px 4px rgba(80,30,0,.06)}
+.vcard-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px}
+.vcard-cliente{font-size:15px;font-weight:600;color:var(--txt);flex:1;line-height:1.2}
+.vcard-actions{display:flex;gap:6px;flex-shrink:0}
+.vcard-row{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt2);margin-bottom:4px}
+.vcard-row strong{color:var(--txt);font-weight:500}
+.vcard-footer{display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--brd)}
+/* Bottom nav */
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--sur);border-top:1px solid var(--brd);z-index:100;padding:6px 0 max(6px,env(safe-area-inset-bottom))}
+.bottom-nav-inner{display:flex;justify-content:space-around;align-items:center}
+.bnav-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 10px;border:none;background:none;cursor:pointer;border-radius:8px;min-width:56px;transition:all .15s}
+.bnav-btn .bico{font-size:20px;line-height:1}
+.bnav-btn .blbl{font-size:9px;font-weight:600;color:var(--txt2);text-transform:uppercase;letter-spacing:.3px}
+.bnav-btn.on .blbl{color:var(--pri)}
+/* Responsive */
+@media(max-width:768px){
+  .topbar .nav{display:none}
+  .bottom-nav{display:block}
+  .main{padding:12px;padding-bottom:80px}
+  .metrics{grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px}
+  .mc-v{font-size:20px}
+  .toolbar input{min-width:unset;width:100%;flex:1 1 100%}
+  .tw{display:none}
+  .vcards-mobile{display:flex}
+  .ov{padding-top:0;align-items:flex-end}
+  .modal{width:100%;max-width:100%;max-height:94vh;border-radius:18px 18px 0 0;padding:18px 16px}
+  .fg{grid-template-columns:1fr}
+  .fgf{grid-column:1}
+  .mbt{flex-direction:column-reverse}
+  .mbt .btn{width:100%;justify-content:center;height:44px;font-size:14px}
+  .proc-lbl{font-size:8px}
+  .stock-grid{grid-template-columns:1fr 1fr}
+  .cards{grid-template-columns:1fr}
+}
+@media(max-width:400px){
+  .metrics{grid-template-columns:repeat(2,1fr)}
+  .stock-grid{grid-template-columns:1fr}
+  .proc-ico{font-size:18px}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div style="display:flex;align-items:center">
+    <h1>🍄 Shirake</h1>
+    <div class="nav">
+      <button class="nav-btn on" onclick="showPage('pedidos')" id="nb-pedidos">📋 Pedidos</button>
+      <button class="nav-btn" onclick="showPage('stock')" id="nb-stock">📦 Stock</button>
+      <button class="nav-btn" onclick="showPage('alertas')" id="nb-alertas">🔔 Alertas <span class="cnt" id="acnt" style="display:none"></span></button>
+      <button class="nav-btn" onclick="showPage('contactos')" id="nb-contactos">👥 Contactos</button>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <div style="font-size:12px;color:var(--txt2)" id="topdate"></div>
+    <button class="btn sm" onclick="openSettings()">⚙️ Ajustes</button>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- ─── PEDIDOS ─── -->
+  <div id="page-pedidos" class="page on">
+    <div class="metrics" id="mped"></div>
+    <div class="toolbar">
+      <input type="search" id="sp" placeholder="🔍 Buscar pedido..." oninput="rPedidos()">
+      <select id="fp" onchange="rPedidos()">
+        <option value="">Todos los estados</option>
+        <option value="1">📋 Pend. Albarán</option>
+        <option value="2">📄 Pend. Factura</option>
+        <option value="3">🧾 Pend. Cobro</option>
+        <option value="4">✅ Cobrado</option>
+      </select>
+      <button class="btn p" onclick="openPedido()">+ Nuevo pedido</button>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr>
+          <th>ID</th>
+          <th>Estado</th>
+          <th onclick="vs('fecha_pedido')">F. Pedido ↕</th>
+          <th>Proveedor</th>
+          <th>Cliente</th>
+          <th>Producto</th>
+          <th style="text-align:center">Cajas</th>
+          <th>Albarán</th>
+          <th>Factura</th>
+          <th>Cobro</th>
+          <th>Acciones</th>
+        </tr></thead>
+        <tbody id="ptbody"></tbody>
+        <tfoot id="ptfoot"></tfoot>
+      </table>
+    </div>
+    <div id="pcards" class="vcards-mobile"></div>
+    <div class="rcount" id="prcount"></div>
+  </div>
+
+  <!-- ─── STOCK ─── -->
+  <div id="page-stock" class="page">
+    <div class="toolbar">
+      <input type="search" id="ss" placeholder="🔍 Buscar producto..." oninput="rStock()">
+      <button class="btn p" onclick="openStock()">+ Nuevo producto</button>
+    </div>
+    <div id="sgrid" class="stock-grid"></div>
+  </div>
+
+  <!-- ─── ALERTAS ─── -->
+  <div id="page-alertas" class="page">
+    <div id="acontent" style="max-width:700px"></div>
+  </div>
+
+  <!-- ─── CONTACTOS ─── -->
+  <div id="page-contactos" class="page">
+    <div class="toolbar">
+      <input type="search" id="sc" placeholder="🔍 Buscar contacto..." oninput="rContactos()">
+      <select id="fc" onchange="rContactos()">
+        <option value="">Todos</option>
+        <option value="cliente">🛒 Clientes</option>
+        <option value="proveedor">📦 Proveedores</option>
+      </select>
+      <button class="btn p" onclick="openContacto()">+ Nuevo contacto</button>
+    </div>
+    <div id="cgrid" class="cards"></div>
+  </div>
+
+</div>
+
+<!-- ─── BOTTOM NAV ─── -->
+<div class="bottom-nav">
+  <div class="bottom-nav-inner">
+    <button class="bnav-btn on" onclick="showPage('pedidos')" id="bn-pedidos"><span class="bico">📋</span><span class="blbl">Pedidos</span></button>
+    <button class="bnav-btn" onclick="showPage('stock')" id="bn-stock"><span class="bico">📦</span><span class="blbl">Stock</span></button>
+    <button class="bnav-btn" onclick="showPage('alertas')" id="bn-alertas"><span class="bico">🔔</span><span class="blbl">Alertas</span></button>
+    <button class="bnav-btn" onclick="showPage('contactos')" id="bn-contactos"><span class="bico">👥</span><span class="blbl">Contactos</span></button>
+  </div>
+</div>
+
+<!-- ═══ MODALES ═══ -->
+
+<!-- Pedido -->
+<div id="pedov" class="ov" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-title"><span id="pedtitle">Nuevo pedido</span><button class="btn sm" onclick="closeModal()">✕</button></div>
+    <div class="proc-track">
+      <div class="proc-step" id="ps1" onclick="stepPedido()"><span class="proc-ico">📋</span><span class="proc-lbl">Pedido</span></div>
+      <div class="proc-conn" id="pc1"></div>
+      <div class="proc-step" id="ps2" onclick="stepAlbaran()"><span class="proc-ico">📦</span><span class="proc-lbl">Albarán</span></div>
+      <div class="proc-conn" id="pc2"></div>
+      <div class="proc-step" id="ps3" onclick="stepFactura()"><span class="proc-ico">🧾</span><span class="proc-lbl">Factura</span></div>
+      <div class="proc-conn" id="pc3"></div>
+      <div class="proc-step" id="ps4" onclick="stepCobro()"><span class="proc-ico">✅</span><span class="proc-lbl">Cobrado</span></div>
+    </div>
+    <div class="fg">
+      <div class="fl"><label>Fecha pedido</label><input type="date" id="i-fpedido"></div>
+      <div class="fl"><label>Cajas</label><input type="number" id="i-cajas" min="0" placeholder="0"></div>
+      <div class="fl"><label>Proveedor</label><input type="text" id="i-prov" placeholder="Nombre del proveedor" list="prov-list"><datalist id="prov-list"></datalist></div>
+      <div class="fl"><label>Cliente / Destino</label><input type="text" id="i-cli" placeholder="Nombre del cliente" list="cli-list"><datalist id="cli-list"></datalist></div>
+      <div class="fl fgf"><label>Producto</label><input type="text" id="i-prod" placeholder="Descripción del producto" list="prod-list"><datalist id="prod-list"></datalist></div>
+      <div class="fl fgf"><label>Notas</label><input type="text" id="i-notas" placeholder="Observaciones"></div>
+    </div>
+    <div class="msec">
+      <div class="msec-title">📦 Albarán de entrega</div>
+      <div class="fg">
+        <div class="fl"><label>Nº Albarán</label><input type="text" id="i-alb" placeholder="Número de albarán"></div>
+        <div class="fl"><label>Fecha albarán</label><input type="date" id="i-falb"></div>
+      </div>
+    </div>
+    <div class="msec">
+      <div class="msec-title">🧾 Facturación y cobro</div>
+      <div class="fg">
+        <div class="fl"><label>Nº Factura</label><input type="text" id="i-fac" placeholder="Número de factura"></div>
+        <div class="fl"><label>Fecha factura</label><input type="date" id="i-ffac"></div>
+        <div class="fl"><label>Importe (€)</label><input type="number" id="i-imp" min="0" step="0.01" placeholder="0.00"></div>
+        <div class="fl"><label>Fecha cobro</label><input type="date" id="i-cob"></div>
+      </div>
+    </div>
+    <div class="mbt">
+      <button class="btn danger" id="delbtn" onclick="delPedidoEdit()" style="display:none">🗑 Eliminar</button>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn p" onclick="savePedido()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Stock producto -->
+<div id="stkov" class="ov" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title"><span id="stktitle">Nuevo producto</span><button class="btn sm" onclick="closeModal()">✕</button></div>
+    <div class="fg">
+      <div class="fl fgf"><label>Nombre del producto</label><input type="text" id="i-sprod" placeholder="Ej: Shiitake fresco 500g"></div>
+      <div class="fl"><label>Gama / Categoría</label><input type="text" id="i-sgama" placeholder="Ej: Setas frescas"></div>
+      <div class="fl"><label>Stock actual (cajas)</label><input type="number" id="i-scajas" min="0" placeholder="0"></div>
+      <div class="fl"><label>Mínimo de alerta (cajas)</label><input type="number" id="i-smin" min="0" placeholder="5"></div>
+      <div class="fl fgf"><label>Notas</label><textarea id="i-snotas" placeholder="Observaciones"></textarea></div>
+    </div>
+    <div class="mbt">
+      <button class="btn danger" id="sdelbtn" onclick="delStockEdit()" style="display:none">🗑 Eliminar</button>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn p" onclick="saveStock()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Movimiento stock -->
+<div id="movov" class="ov" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title"><span id="movtitle">Entrada de stock</span><button class="btn sm" onclick="closeModal()">✕</button></div>
+    <div class="fg">
+      <div class="fl"><label>Cajas</label><input type="number" id="i-movcajas" min="1" placeholder="0"></div>
+      <div class="fl"><label>Fecha</label><input type="date" id="i-movfecha"></div>
+      <div class="fl fgf"><label>Referencia (albarán, pedido...)</label><input type="text" id="i-movref" placeholder="Opcional"></div>
+      <div class="fl fgf"><label>Notas</label><input type="text" id="i-movnotas" placeholder="Opcional"></div>
+    </div>
+    <div class="mbt">
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn p" id="movbtn" onclick="saveMovimiento()">✅ Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Contacto -->
+<div id="conov" class="ov" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-title"><span id="contitle">Nuevo contacto</span><button class="btn sm" onclick="closeModal()">✕</button></div>
+    <div class="fg">
+      <div class="fl fgf"><label>Nombre</label><input type="text" id="i-cnombre" placeholder="Nombre o razón social"></div>
+      <div class="fl"><label>Tipo</label><select id="i-ctipo"><option value="cliente">🛒 Cliente</option><option value="proveedor">📦 Proveedor</option></select></div>
+      <div class="fl"><label>Teléfono</label><input type="tel" id="i-ctel" placeholder="600 000 000"></div>
+      <div class="fl"><label>Email</label><input type="email" id="i-cemail" placeholder="email@ejemplo.com"></div>
+      <div class="fl fgf"><label>Dirección</label><input type="text" id="i-cdir" placeholder="Dirección"></div>
+      <div class="fl fgf"><label>Notas</label><textarea id="i-cnotas" placeholder="Observaciones"></textarea></div>
+    </div>
+    <div class="mbt">
+      <button class="btn danger" id="cdelbtn" onclick="delContactoEdit()" style="display:none">🗑 Eliminar</button>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn p" onclick="saveContacto()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings -->
+<div id="setov" class="ov" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">⚙️ Ajustes<button class="btn sm" onclick="closeModal()">✕</button></div>
+    <div class="fl" style="margin-bottom:12px">
+      <label>📱 Número WhatsApp fijo (sin + ni espacios)</label>
+      <input type="tel" id="i-waphone" placeholder="Ej: 34612345678" style="font-size:15px;letter-spacing:1px">
+    </div>
+    <div style="font-size:11px;color:var(--txt2);background:var(--pri-l);border:1px solid #f0c8a8;border-radius:8px;padding:10px 12px;margin-bottom:14px">
+      📌 <strong>Formato:</strong> código de país + número, sin espacios ni «+».<br>España → <strong>34</strong> seguido del número (ej: <strong>34612345678</strong>)
+    </div>
+    <div class="mbt">
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn p" onclick="saveSettings()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let DB = {
+  pedidos:[
+    {id:1,fecha_pedido:'2026-06-01',proveedor:'Proveedor Demo',cliente:'Cliente A',producto:'Shiitake fresco 500g',cajas:20,albaran:'ALB-001',fecha_albaran:'2026-06-03',factura:'FAC-001',fecha_factura:'2026-06-05',importe:840,cobro:'2026-06-15',notas:''},
+    {id:2,fecha_pedido:'2026-06-05',proveedor:'Proveedor Demo',cliente:'Cliente B',producto:'Shiitake seco 250g',cajas:15,albaran:'ALB-002',fecha_albaran:'2026-06-07',factura:'',fecha_factura:'',importe:0,cobro:'',notas:''},
+    {id:3,fecha_pedido:'2026-06-10',proveedor:'Proveedor Demo',cliente:'Cliente C',producto:'Shiitake fresco 1kg',cajas:30,albaran:'',fecha_albaran:'',factura:'',fecha_factura:'',importe:0,cobro:'',notas:'Urgente'},
+    {id:4,fecha_pedido:'2026-06-12',proveedor:'Proveedor Demo',cliente:'Cliente A',producto:'Shiitake seco 250g',cajas:10,albaran:'',fecha_albaran:'',factura:'',fecha_factura:'',importe:0,cobro:'',notas:''},
+  ],
+  stock:[
+    {id:1,producto:'Shiitake fresco 500g',gama:'Setas frescas',cajas:45,cajas_min:10,notas:''},
+    {id:2,producto:'Shiitake fresco 1kg',gama:'Setas frescas',cajas:8,cajas_min:10,notas:''},
+    {id:3,producto:'Shiitake seco 250g',gama:'Setas secas',cajas:23,cajas_min:5,notas:''},
+    {id:4,producto:'Shiitake seco 100g',gama:'Setas secas',cajas:3,cajas_min:8,notas:'Stock crítico'},
+  ],
+  movimientos:[],
+  contactos:[
+    {id:1,nombre:'Cliente A',tipo:'cliente',telefono:'93 111 22 33',email:'clientea@ejemplo.es',direccion:'Barcelona',notas:''},
+    {id:2,nombre:'Cliente B',tipo:'cliente',telefono:'93 222 33 44',email:'clienteb@ejemplo.es',direccion:'Girona',notas:''},
+    {id:3,nombre:'Cliente C',tipo:'cliente',telefono:'',email:'',direccion:'',notas:''},
+    {id:4,nombre:'Proveedor Demo',tipo:'proveedor',telefono:'91 444 55 66',email:'proveedor@demo.es',direccion:'Madrid',notas:''},
+  ],
+  nid:{p:5,s:5,m:1,c:5}
+};
+
+// ─── SUPABASE ─────────────────────────────────────────────────────────────────
+// Rellenar con los datos de tu proyecto Supabase para Shirake
+const SB_URL = '';
+const SB_KEY = '';
+const SB_HDR = {'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'return=representation'};
+
+async function sbGet(t){
+  if(!SB_URL||!SB_KEY) return null;
+  try{const r=await fetch(`${SB_URL}/rest/v1/${t}?order=id`,{headers:SB_HDR});if(!r.ok)return null;return r.json();}catch{return null;}
+}
+async function sbInsert(t,obj){
+  if(!SB_URL||!SB_KEY) return null;
+  try{const{id,created_at,...d}=obj;const r=await fetch(`${SB_URL}/rest/v1/${t}`,{method:'POST',headers:SB_HDR,body:JSON.stringify(d)});if(!r.ok)return null;const res=await r.json();return Array.isArray(res)?res[0]:res;}catch{return null;}
+}
+async function sbUpdate(t,id,obj){
+  if(!SB_URL||!SB_KEY) return null;
+  try{const{id:_,created_at,...d}=obj;const r=await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`,{method:'PATCH',headers:SB_HDR,body:JSON.stringify(d)});if(!r.ok)return null;const res=await r.json();return Array.isArray(res)?res[0]:res;}catch{return null;}
+}
+async function sbDelete(t,id){
+  if(!SB_URL||!SB_KEY) return;
+  try{await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`,{method:'DELETE',headers:{...SB_HDR,'Prefer':''}});}catch{}
+}
+
+function showLoading(m){
+  let el=document.getElementById('sb-bar');
+  if(!el){el=document.createElement('div');el.id='sb-bar';el.style.cssText='position:fixed;top:52px;left:0;right:0;background:var(--pri);color:#fff;text-align:center;padding:5px;font-size:12px;z-index:999';document.body.appendChild(el);}
+  el.textContent=m;el.style.display='block';
+}
+function hideLoading(){const el=document.getElementById('sb-bar');if(el)el.style.display='none';}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+async function init(){
+  const d=new Date();
+  document.getElementById('topdate').textContent=d.toLocaleDateString('es-ES',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+  showLoading('Conectando...');
+  const [ped,stk,mov,con]=await Promise.all([
+    sbGet('pedidos_shirake'),sbGet('stock_shirake'),sbGet('movimientos_shirake'),sbGet('contactos_shirake')
+  ]);
+  if(ped){DB.pedidos=ped;if(ped.length)DB.nid.p=Math.max(...ped.map(x=>x.id))+1;}
+  if(stk){DB.stock=stk;if(stk.length)DB.nid.s=Math.max(...stk.map(x=>x.id))+1;}
+  if(mov){DB.movimientos=mov;if(mov.length)DB.nid.m=Math.max(...mov.map(x=>x.id))+1;}
+  if(con){DB.contactos=con;if(con.length)DB.nid.c=Math.max(...con.map(x=>x.id))+1;}
+  hideLoading();
+  rPedidos();rStock();rAlertas();rContactos();updateAlertBadge();
+}
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function today(){return new Date().toISOString().slice(0,10);}
+function fd(d){if(!d)return '';try{const[y,m,dd]=d.split('-');return dd+'/'+m+'/'+y;}catch{return d;}}
+function closeModal(){['pedov','stkov','movov','conov','setov'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+
+function showPage(n){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  document.getElementById('page-'+n).classList.add('on');
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('on'));
+  document.getElementById('nb-'+n).classList.add('on');
+  document.querySelectorAll('.bnav-btn').forEach(b=>b.classList.remove('on'));
+  document.getElementById('bn-'+n).classList.add('on');
+  if(n==='alertas')rAlertas();
+}
+
+// ─── PROCESO ─────────────────────────────────────────────────────────────────
+function getProceso(p){
+  if((p.cobro||'').trim()) return {step:4,label:'✅ Cobrado',cls:'4'};
+  if((p.factura||'').trim()) return {step:3,label:'🧾 Pend. Cobro',cls:'3'};
+  if((p.albaran||'').trim()) return {step:2,label:'📄 Pend. Factura',cls:'2'};
+  return {step:1,label:'📋 Pend. Albarán',cls:'1'};
+}
+
+function updateProcTrack(step){
+  for(let i=1;i<=4;i++){
+    const s=document.getElementById('ps'+i);
+    if(s) s.className='proc-step'+(i<step?' done':i===step?' active':'');
+  }
+  for(let i=1;i<=3;i++){
+    const c=document.getElementById('pc'+i);
+    if(c) c.className='proc-conn'+(i<step?' done':'');
+  }
+}
+
+function _flash(el,col){
+  el.style.transition='box-shadow .3s';
+  el.style.boxShadow='0 0 0 3px '+col;
+  setTimeout(()=>el.style.boxShadow='',1500);
+}
+function stepPedido(){const el=document.getElementById('i-fpedido');if(!el)return;if(!el.value)el.value=today();_flash(el,'#f0c8a8');}
+function stepAlbaran(){const el=document.getElementById('i-alb');if(!el)return;el.focus();_flash(el,'#f0c8a8');el.scrollIntoView({behavior:'smooth',block:'center'});}
+function stepFactura(){const el=document.getElementById('i-fac');if(!el)return;el.focus();_flash(el,'#d8b8e8');el.scrollIntoView({behavior:'smooth',block:'center'});}
+function stepCobro(){const el=document.getElementById('i-cob');if(!el)return;if(!el.value)el.value=today();el.focus();_flash(el,'#b8dba0');el.scrollIntoView({behavior:'smooth',block:'center'});}
+
+// ─── GENID ───────────────────────────────────────────────────────────────────
+function genId(p){
+  const cli=(p.cliente||'???').substring(0,4).toUpperCase().replace(/\s/g,'');
+  const f=p.fecha_pedido?p.fecha_pedido.slice(8,10)+p.fecha_pedido.slice(5,7):'0000';
+  const n=[...DB.pedidos].sort((a,b)=>a.id-b.id).findIndex(x=>x.id===p.id)+1;
+  return 'SHI-'+cli+'-'+f+'-'+n;
+}
+
+// ─── PEDIDOS ─────────────────────────────────────────────────────────────────
+let sortP={f:'fecha_pedido',d:1};
+function vs(f){if(sortP.f===f)sortP.d*=-1;else{sortP.f=f;sortP.d=1;}rPedidos();}
+
+function rPedidos(){
+  const q=(document.getElementById('sp').value||'').toLowerCase();
+  const flt=document.getElementById('fp').value;
+  let rows=DB.pedidos.filter(p=>{
+    const proc=getProceso(p);
+    if(flt&&String(proc.step)!==flt) return false;
+    if(!q) return true;
+    return [p.cliente,p.proveedor,p.producto,p.albaran,p.factura,genId(p)].some(v=>(v||'').toLowerCase().includes(q));
+  }).sort((a,b)=>{
+    const pa=getProceso(a).step,pb=getProceso(b).step;
+    if(pa!==pb) return pa-pb;
+    const av=a[sortP.f]||'',bv=b[sortP.f]||'';
+    return av<bv?-sortP.d:av>bv?sortP.d:0;
+  });
+
+  const tot=DB.pedidos.length;
+  const s1=DB.pedidos.filter(p=>getProceso(p).step===1).length;
+  const s2=DB.pedidos.filter(p=>getProceso(p).step===2).length;
+  const s3=DB.pedidos.filter(p=>getProceso(p).step===3).length;
+  const s4=DB.pedidos.filter(p=>getProceso(p).step===4).length;
+  document.getElementById('mped').innerHTML=`
+    <div class="mc"><div class="mc-l">Total pedidos</div><div class="mc-v" style="color:var(--pri)">${tot}</div></div>
+    <div class="mc"><div class="mc-l">📋 Pend. albarán</div><div class="mc-v" style="color:var(--wn-txt)">${s1}</div></div>
+    <div class="mc"><div class="mc-l">📄 Pend. factura</div><div class="mc-v" style="color:var(--pri)">${s2}</div></div>
+    <div class="mc"><div class="mc-l">🧾 Pend. cobro</div><div class="mc-v" style="color:var(--mv-txt)">${s3}</div></div>
+    <div class="mc"><div class="mc-l">✅ Cobrados</div><div class="mc-v" style="color:var(--ok-txt)">${s4}</div></div>`;
+
+  document.getElementById('ptbody').innerHTML=rows.length?rows.map(p=>{
+    const proc=getProceso(p);
+    return `<tr>
+      <td style="font-weight:600;color:var(--pri);font-size:11px;white-space:nowrap">${genId(p)}</td>
+      <td><span class="pbdg pbdg-${proc.cls}">${proc.label}</span></td>
+      <td>${fd(p.fecha_pedido)}</td>
+      <td style="color:var(--txt2);font-size:12px">${p.proveedor||'—'}</td>
+      <td style="font-weight:500">${p.cliente||'—'}</td>
+      <td style="color:var(--txt2);font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.producto||'—'}</td>
+      <td style="text-align:center">${p.cajas||'—'}</td>
+      <td>${p.albaran||'—'}</td>
+      <td>${p.factura||'—'}</td>
+      <td>${p.cobro?`<span style="background:var(--ok-bg);color:var(--ok-txt);padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600">✅ ${fd(p.cobro)}</span>`:'—'}</td>
+      <td style="display:flex;gap:4px;white-space:nowrap">
+        <button class="btn sm wa" onclick="sendWA(${p.id})" title="WhatsApp">💬</button>
+        <button class="btn sm" onclick="openPedido(${p.id})">✏️</button>
+        <button class="btn sm danger" onclick="delPedido(${p.id})">🗑</button>
+      </td>
+    </tr>`;
+  }).join(''):`<tr><td colspan="11" class="empty">Sin pedidos</td></tr>`;
+
+  if(rows.length){
+    const tc=rows.reduce((s,p)=>s+(parseInt(p.cajas)||0),0);
+    document.getElementById('ptfoot').innerHTML=`<tr class="totals-row"><td colspan="6" style="text-align:right;font-size:11px;color:var(--txt2)">TOTALES:</td><td style="text-align:center">${tc}</td><td colspan="4"></td></tr>`;
+  } else document.getElementById('ptfoot').innerHTML='';
+
+  const mc=document.getElementById('pcards');
+  if(mc) mc.innerHTML=rows.length?rows.map(p=>{
+    const proc=getProceso(p);
+    const clsMap={1:['var(--wn-bg)','var(--wn-txt)'],2:['var(--pri-l)','var(--pri-h)'],3:['var(--mv-bg)','var(--mv-txt)'],4:['var(--ok-bg)','var(--ok-txt)']};
+    const[sbg,stxt]=clsMap[proc.step];
+    return `<div class="vcard">
+      <div class="vcard-head">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--pri);letter-spacing:.3px;margin-bottom:2px">${genId(p)}</div>
+          <div class="vcard-cliente">${p.cliente||'—'}</div>
+          <span class="pbdg pbdg-${proc.cls}" style="margin-top:4px;display:inline-flex">${proc.label}</span>
+        </div>
+        <div class="vcard-actions">
+          <button class="btn sm wa" onclick="sendWA(${p.id})" title="WhatsApp">💬</button>
+          <button class="btn sm" onclick="openPedido(${p.id})">✏️</button>
+        </div>
+      </div>
+      <div class="vcard-row">📦 <strong>${p.proveedor||'—'}</strong></div>
+      <div class="vcard-row">🧴 <strong>${p.producto||'—'}</strong>${p.cajas?' · '+p.cajas+' cajas':''}</div>
+      <div class="vcard-row">
+        ${p.albaran?'📄 Alb: <strong>'+p.albaran+'</strong>':''}
+        ${p.factura?' &nbsp;·&nbsp; 🧾 Fac: <strong>'+p.factura+'</strong>':''}
+      </div>
+      <div class="vcard-row">
+        ${p.fecha_pedido?'📅 '+fd(p.fecha_pedido):''}
+        ${p.fecha_albaran?' &nbsp;·&nbsp; '+fd(p.fecha_albaran):''}
+      </div>
+      <div class="vcard-footer">
+        <span style="background:${sbg};color:${stxt};padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600">${proc.label}</span>
+        <button class="btn sm danger" onclick="delPedido(${p.id})">🗑</button>
+      </div>
+    </div>`;
+  }).join(''):'<div class="empty">Sin pedidos</div>';
+
+  document.getElementById('prcount').textContent=`Mostrando ${rows.length} de ${DB.pedidos.length} pedidos`;
+}
+
+let _editPedId=null;
+function openPedido(id){
+  _editPedId=id||null;
+  document.getElementById('pedov').style.display='flex';
+  const p=id?DB.pedidos.find(x=>x.id===id):null;
+  document.getElementById('pedtitle').textContent=p?'Editar pedido':'Nuevo pedido';
+  document.getElementById('delbtn').style.display=p?'':'none';
+  const provs=[...new Set(DB.contactos.filter(c=>c.tipo==='proveedor').map(c=>c.nombre))];
+  const clis=[...new Set(DB.contactos.filter(c=>c.tipo==='cliente').map(c=>c.nombre))];
+  const prods=[...new Set(DB.stock.map(s=>s.producto))];
+  document.getElementById('prov-list').innerHTML=provs.map(v=>`<option value="${v}">`).join('');
+  document.getElementById('cli-list').innerHTML=clis.map(v=>`<option value="${v}">`).join('');
+  document.getElementById('prod-list').innerHTML=prods.map(v=>`<option value="${v}">`).join('');
+  document.getElementById('i-fpedido').value=p?p.fecha_pedido||'':today();
+  document.getElementById('i-cajas').value=p?p.cajas||'':'';
+  document.getElementById('i-prov').value=p?p.proveedor||'':'';
+  document.getElementById('i-cli').value=p?p.cliente||'':'';
+  document.getElementById('i-prod').value=p?p.producto||'':'';
+  document.getElementById('i-notas').value=p?p.notas||'':'';
+  document.getElementById('i-alb').value=p?p.albaran||'':'';
+  document.getElementById('i-falb').value=p?p.fecha_albaran||'':'';
+  document.getElementById('i-fac').value=p?p.factura||'':'';
+  document.getElementById('i-ffac').value=p?p.fecha_factura||'':'';
+  document.getElementById('i-imp').value=p?p.importe||'':'';
+  document.getElementById('i-cob').value=p?p.cobro||'':'';
+  updateProcTrack(p?getProceso(p).step:1);
+}
+
+async function savePedido(){
+  const obj={
+    id:_editPedId||DB.nid.p,
+    fecha_pedido:document.getElementById('i-fpedido').value,
+    proveedor:document.getElementById('i-prov').value.trim(),
+    cliente:document.getElementById('i-cli').value.trim(),
+    producto:document.getElementById('i-prod').value.trim(),
+    cajas:parseInt(document.getElementById('i-cajas').value)||0,
+    notas:document.getElementById('i-notas').value.trim(),
+    albaran:document.getElementById('i-alb').value.trim(),
+    fecha_albaran:document.getElementById('i-falb').value,
+    factura:document.getElementById('i-fac').value.trim(),
+    fecha_factura:document.getElementById('i-ffac').value,
+    importe:parseFloat(document.getElementById('i-imp').value)||0,
+    cobro:document.getElementById('i-cob').value,
+  };
+  if(!obj.cliente){alert('El cliente es obligatorio');return;}
+  showLoading('Guardando...');
+  if(_editPedId){
+    await sbUpdate('pedidos_shirake',_editPedId,obj);
+    const i=DB.pedidos.findIndex(x=>x.id===_editPedId);
+    if(i>=0) DB.pedidos[i]=obj;
+  } else {
+    const res=await sbInsert('pedidos_shirake',obj);
+    if(res&&res.id) obj.id=res.id;
+    DB.pedidos.push(obj);
+    DB.nid.p=Math.max(DB.nid.p,obj.id+1);
+  }
+  hideLoading();closeModal();rPedidos();rAlertas();updateAlertBadge();
+}
+
+async function delPedido(id){
+  if(!confirm('¿Eliminar este pedido?')) return;
+  showLoading('Eliminando...');
+  await sbDelete('pedidos_shirake',id);
+  DB.pedidos=DB.pedidos.filter(x=>x.id!==id);
+  hideLoading();closeModal();rPedidos();rAlertas();updateAlertBadge();
+}
+function delPedidoEdit(){if(_editPedId) delPedido(_editPedId);}
+
+// ─── WHATSAPP ────────────────────────────────────────────────────────────────
+function getWAPhone(){return localStorage.getItem('shi_wa_phone')||'';}
+function sendWA(id){
+  const p=DB.pedidos.find(x=>x.id===id);if(!p)return;
+  const proc=getProceso(p);
+  const partes=[
+    `🍄 *Planning Shirake — Pedido*`,
+    `🆔 *Ref:* ${genId(p)}`,
+    '',
+    `👤 *Cliente:* ${p.cliente||'—'}`,
+    `📦 *Proveedor:* ${p.proveedor||'—'}`,
+    `🧴 *Producto:* ${p.producto||'—'}`,
+    `📦 *Cajas:* ${p.cajas||0}`,
+    '',
+    `📊 *Estado:* ${proc.label}`,
+  ];
+  if(p.albaran) partes.push(`📄 *Albarán:* ${p.albaran}${p.fecha_albaran?' ('+fd(p.fecha_albaran)+')':''}`);
+  if(p.factura) partes.push(`🧾 *Factura:* ${p.factura}${p.importe?' · '+p.importe.toLocaleString('es-ES')+' €':''}`);
+  if(p.cobro) partes.push(`✅ *Cobrado:* ${fd(p.cobro)}`);
+  if(p.notas) partes.push(`📝 *Notas:* ${p.notas}`);
+  partes.push('');
+  partes.push(`📅 *Fecha pedido:* ${fd(p.fecha_pedido)}`);
+  const phone=getWAPhone();
+  window.open((phone?`https://wa.me/${phone}?text=`:`https://wa.me/?text=`)+encodeURIComponent(partes.join('\n')),'_blank');
+}
+
+// ─── STOCK ───────────────────────────────────────────────────────────────────
+function stockLevel(s){
+  if(s.cajas<=0) return 'crit';
+  if(s.cajas<=s.cajas_min) return 'low';
+  return 'ok';
+}
+const lvlIco={ok:'🟢',low:'🟡',crit:'🔴'};
+const lvlTxt={ok:'Suficiente',low:'Stock bajo',crit:'Stock crítico'};
+const lvlColor={ok:'var(--ok-txt)',low:'var(--wn-txt)',crit:'var(--al-txt)'};
+
+function rStock(){
+  const q=(document.getElementById('ss').value||'').toLowerCase();
+  const rows=DB.stock.filter(s=>!q||[s.producto,s.gama].some(v=>(v||'').toLowerCase().includes(q)));
+  document.getElementById('sgrid').innerHTML=rows.length?rows.map(s=>{
+    const lv=stockLevel(s);
+    return `<div class="scard ${lv}">
+      <div class="scard-name">${s.producto||'—'}</div>
+      <div class="scard-gama">${s.gama||'Sin categoría'}</div>
+      <div class="scard-cajas" style="color:${lvlColor[lv]}">${s.cajas}</div>
+      <div class="scard-min">${lvlIco[lv]} ${lvlTxt[lv]} · Mín: ${s.cajas_min} cajas</div>
+      <div class="scard-actions">
+        <button class="btn sm entrada" onclick="openMovimiento(${s.id},'entrada')">+ Entrada</button>
+        <button class="btn sm salida" onclick="openMovimiento(${s.id},'salida')">− Salida</button>
+        <button class="btn sm" onclick="openStock(${s.id})">✏️</button>
+      </div>
+    </div>`;
+  }).join(''):`<div class="empty" style="grid-column:1/-1">Sin productos en stock</div>`;
+}
+
+let _editStkId=null;
+function openStock(id){
+  _editStkId=id||null;
+  document.getElementById('stkov').style.display='flex';
+  const s=id?DB.stock.find(x=>x.id===id):null;
+  document.getElementById('stktitle').textContent=s?'Editar producto':'Nuevo producto';
+  document.getElementById('sdelbtn').style.display=s?'':'none';
+  document.getElementById('i-sprod').value=s?s.producto||'':'';
+  document.getElementById('i-sgama').value=s?s.gama||'':'';
+  document.getElementById('i-scajas').value=s?s.cajas||0:'';
+  document.getElementById('i-smin').value=s?s.cajas_min||5:'5';
+  document.getElementById('i-snotas').value=s?s.notas||'':'';
+}
+async function saveStock(){
+  const obj={id:_editStkId||DB.nid.s,producto:document.getElementById('i-sprod').value.trim(),gama:document.getElementById('i-sgama').value.trim(),cajas:parseInt(document.getElementById('i-scajas').value)||0,cajas_min:parseInt(document.getElementById('i-smin').value)||5,notas:document.getElementById('i-snotas').value.trim()};
+  if(!obj.producto){alert('El nombre del producto es obligatorio');return;}
+  showLoading('Guardando...');
+  if(_editStkId){
+    await sbUpdate('stock_shirake',_editStkId,obj);
+    const i=DB.stock.findIndex(x=>x.id===_editStkId);if(i>=0)DB.stock[i]=obj;
+  } else {
+    const res=await sbInsert('stock_shirake',obj);
+    if(res&&res.id)obj.id=res.id;
+    DB.stock.push(obj);DB.nid.s=Math.max(DB.nid.s,obj.id+1);
+  }
+  hideLoading();closeModal();rStock();rAlertas();updateAlertBadge();
+}
+async function delStock(id){
+  if(!confirm('¿Eliminar este producto del stock?')) return;
+  showLoading('Eliminando...');
+  await sbDelete('stock_shirake',id);
+  DB.stock=DB.stock.filter(x=>x.id!==id);
+  DB.movimientos=DB.movimientos.filter(x=>x.stock_id!==id);
+  hideLoading();closeModal();rStock();rAlertas();updateAlertBadge();
+}
+function delStockEdit(){if(_editStkId)delStock(_editStkId);}
+
+let _movStkId=null,_movTipo=null;
+function openMovimiento(stockId,tipo){
+  _movStkId=stockId;_movTipo=tipo;
+  const s=DB.stock.find(x=>x.id===stockId);
+  document.getElementById('movov').style.display='flex';
+  document.getElementById('movtitle').textContent=(tipo==='entrada'?'📥 Entrada':'📤 Salida')+' — '+(s?s.producto:'');
+  document.getElementById('movbtn').textContent=tipo==='entrada'?'✅ Confirmar entrada':'✅ Confirmar salida';
+  document.getElementById('movbtn').className='btn p';
+  document.getElementById('i-movcajas').value='';
+  document.getElementById('i-movfecha').value=today();
+  document.getElementById('i-movref').value='';
+  document.getElementById('i-movnotas').value='';
+}
+async function saveMovimiento(){
+  const cajas=parseInt(document.getElementById('i-movcajas').value)||0;
+  if(cajas<=0){alert('Introduce el número de cajas');return;}
+  const s=DB.stock.find(x=>x.id===_movStkId);if(!s)return;
+  if(_movTipo==='salida'&&cajas>s.cajas){if(!confirm(`Solo hay ${s.cajas} cajas disponibles. ¿Continuar?`))return;}
+  const mov={id:DB.nid.m,stock_id:_movStkId,tipo:_movTipo,cajas,fecha:document.getElementById('i-movfecha').value,ref:document.getElementById('i-movref').value.trim(),notas:document.getElementById('i-movnotas').value.trim()};
+  showLoading('Actualizando stock...');
+  const res=await sbInsert('movimientos_shirake',mov);
+  if(res&&res.id)mov.id=res.id;
+  DB.movimientos.push(mov);DB.nid.m=Math.max(DB.nid.m,mov.id+1);
+  const newCajas=_movTipo==='entrada'?s.cajas+cajas:Math.max(0,s.cajas-cajas);
+  const updated={...s,cajas:newCajas};
+  await sbUpdate('stock_shirake',s.id,updated);
+  const i=DB.stock.findIndex(x=>x.id===s.id);if(i>=0)DB.stock[i]=updated;
+  hideLoading();closeModal();rStock();rAlertas();updateAlertBadge();
+}
+
+// ─── ALERTAS ────────────────────────────────────────────────────────────────
+function getAlertCount(){
+  return DB.stock.filter(s=>s.cajas<=s.cajas_min).length+DB.pedidos.filter(p=>getProceso(p).step<4).length;
+}
+function updateAlertBadge(){
+  const cnt=getAlertCount();
+  const el=document.getElementById('acnt');
+  if(el){el.textContent=cnt;el.style.display=cnt?'':'none';}
+}
+function rAlertas(){
+  updateAlertBadge();
+  const stockBajo=DB.stock.filter(s=>s.cajas<=s.cajas_min);
+  const p1=DB.pedidos.filter(p=>getProceso(p).step===1);
+  const p2=DB.pedidos.filter(p=>getProceso(p).step===2);
+  const p3=DB.pedidos.filter(p=>getProceso(p).step===3);
+  let html='';
+  if(stockBajo.length){
+    html+=`<div class="sec-title">⚠️ Stock bajo mínimo (${stockBajo.length})</div>`;
+    html+=stockBajo.map(s=>`<div class="alert-item urg">
+      <div style="flex:1"><strong>${s.producto}</strong><div style="font-size:11px;color:var(--al-txt)">${s.cajas} cajas · Mínimo: ${s.cajas_min}</div></div>
+      <button class="btn sm entrada" onclick="openMovimiento(${s.id},'entrada')">+ Entrada</button>
+    </div>`).join('');
+  }
+  if(p1.length){
+    html+=`<div class="sec-title" style="margin-top:${html?'16px':'0'}">📋 Pendientes de albarán (${p1.length})</div>`;
+    html+=p1.map(p=>`<div class="alert-item urg">
+      <div style="flex:1"><strong>${p.cliente||'—'}</strong> · ${p.producto||'—'}<div style="font-size:11px;color:var(--txt2)">${fd(p.fecha_pedido)} · ${p.cajas||0} cajas</div></div>
+      <button class="btn sm" onclick="openPedido(${p.id})">✏️</button>
+    </div>`).join('');
+  }
+  if(p2.length){
+    html+=`<div class="sec-title" style="margin-top:16px">📄 Pendientes de factura (${p2.length})</div>`;
+    html+=p2.map(p=>`<div class="alert-item wn">
+      <div style="flex:1"><strong>${p.cliente||'—'}</strong> · Alb: ${p.albaran||'—'}<div style="font-size:11px;color:var(--txt2)">${fd(p.fecha_pedido)} · ${p.cajas||0} cajas</div></div>
+      <button class="btn sm" onclick="openPedido(${p.id})">✏️</button>
+    </div>`).join('');
+  }
+  if(p3.length){
+    html+=`<div class="sec-title" style="margin-top:16px">🧾 Pendientes de cobro (${p3.length})</div>`;
+    html+=p3.map(p=>`<div class="alert-item">
+      <div style="flex:1"><strong>${p.cliente||'—'}</strong> · Fra: ${p.factura||'—'}${p.importe?` · ${p.importe.toLocaleString('es-ES')} €`:''}<div style="font-size:11px;color:var(--txt2)">${fd(p.fecha_pedido)} · ${p.cajas||0} cajas</div></div>
+      <button class="btn sm ok" onclick="markCobrado(${p.id})">✅ Cobrado</button>
+      <button class="btn sm" onclick="openPedido(${p.id})">✏️</button>
+    </div>`).join('');
+  }
+  if(!html) html=`<div class="empty">✅ Todo al día — sin alertas pendientes</div>`;
+  document.getElementById('acontent').innerHTML=html;
+}
+async function markCobrado(id){
+  const p=DB.pedidos.find(x=>x.id===id);if(!p)return;
+  p.cobro=today();
+  showLoading('Actualizando...');
+  await sbUpdate('pedidos_shirake',id,p);
+  hideLoading();rPedidos();rAlertas();updateAlertBadge();
+}
+
+// ─── CONTACTOS ───────────────────────────────────────────────────────────────
+function rContactos(){
+  const q=(document.getElementById('sc').value||'').toLowerCase();
+  const flt=document.getElementById('fc').value;
+  const rows=DB.contactos.filter(c=>{
+    if(flt&&c.tipo!==flt)return false;
+    if(!q)return true;
+    return [c.nombre,c.telefono,c.email].some(v=>(v||'').toLowerCase().includes(q));
+  });
+  document.getElementById('cgrid').innerHTML=rows.length?rows.map(c=>{
+    const ini=(c.nombre||'?').substring(0,2).toUpperCase();
+    const nped=DB.pedidos.filter(p=>p.cliente===c.nombre||p.proveedor===c.nombre).length;
+    return `<div class="card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div class="avatar ${c.tipo==='cliente'?'av-b':'av-g'}">${ini}</div>
+        <div><div class="card-name">${c.nombre}</div><div class="card-sub">${c.tipo==='cliente'?'🛒 Cliente':'📦 Proveedor'} · ${nped} pedido(s)</div></div>
+      </div>
+      ${c.telefono?`<div class="card-row">📞 ${c.telefono}</div>`:''}
+      ${c.email?`<div class="card-row">✉️ <a href="mailto:${c.email}" style="color:var(--pri)">${c.email}</a></div>`:''}
+      ${c.direccion?`<div class="card-row">📍 ${c.direccion}</div>`:''}
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <button class="btn sm" onclick="openContacto(${c.id})">✏️ Editar</button>
+        <button class="btn sm danger" onclick="delContacto(${c.id})">🗑</button>
+      </div>
+    </div>`;
+  }).join(''):`<div class="empty">Sin contactos</div>`;
+}
+let _editConId=null;
+function openContacto(id){
+  _editConId=id||null;
+  document.getElementById('conov').style.display='flex';
+  const c=id?DB.contactos.find(x=>x.id===id):null;
+  document.getElementById('contitle').textContent=c?'Editar contacto':'Nuevo contacto';
+  document.getElementById('cdelbtn').style.display=c?'':'none';
+  document.getElementById('i-cnombre').value=c?c.nombre||'':'';
+  document.getElementById('i-ctipo').value=c?c.tipo||'cliente':'cliente';
+  document.getElementById('i-ctel').value=c?c.telefono||'':'';
+  document.getElementById('i-cemail').value=c?c.email||'':'';
+  document.getElementById('i-cdir').value=c?c.direccion||'':'';
+  document.getElementById('i-cnotas').value=c?c.notas||'':'';
+}
+async function saveContacto(){
+  const obj={id:_editConId||DB.nid.c,nombre:document.getElementById('i-cnombre').value.trim(),tipo:document.getElementById('i-ctipo').value,telefono:document.getElementById('i-ctel').value.trim(),email:document.getElementById('i-cemail').value.trim(),direccion:document.getElementById('i-cdir').value.trim(),notas:document.getElementById('i-cnotas').value.trim()};
+  if(!obj.nombre){alert('El nombre es obligatorio');return;}
+  showLoading('Guardando...');
+  if(_editConId){
+    await sbUpdate('contactos_shirake',_editConId,obj);
+    const i=DB.contactos.findIndex(x=>x.id===_editConId);if(i>=0)DB.contactos[i]=obj;
+  } else {
+    const res=await sbInsert('contactos_shirake',obj);
+    if(res&&res.id)obj.id=res.id;
+    DB.contactos.push(obj);DB.nid.c=Math.max(DB.nid.c,obj.id+1);
+  }
+  hideLoading();closeModal();rContactos();
+}
+async function delContacto(id){
+  if(!confirm('¿Eliminar este contacto?'))return;
+  showLoading('Eliminando...');
+  await sbDelete('contactos_shirake',id);
+  DB.contactos=DB.contactos.filter(x=>x.id!==id);
+  hideLoading();closeModal();rContactos();
+}
+function delContactoEdit(){if(_editConId)delContacto(_editConId);}
+
+// ─── SETTINGS ────────────────────────────────────────────────────────────────
+function openSettings(){document.getElementById('i-waphone').value=getWAPhone();document.getElementById('setov').style.display='flex';}
+function saveSettings(){
+  const val=(document.getElementById('i-waphone').value||'').trim().replace(/\D/g,'');
+  if(val)localStorage.setItem('shi_wa_phone',val);else localStorage.removeItem('shi_wa_phone');
+  closeModal();alert(val?`✅ Número guardado: +${val}`:'✅ Ajustes guardados');
+}
+
+// ─── NOTIFICACIÓN DE PESTAÑA ─────────────────────────────────────────────────
+const _baseTitle='Planning Shirake';
+let _tabInt=null;
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){
+    const cnt=getAlertCount();
+    if(cnt>0){
+      let tog=true;
+      _tabInt=setInterval(()=>{
+        document.title=tog?`🔔 ${cnt} alerta${cnt>1?'s':''} · Shirake`:_baseTitle;
+        tog=!tog;
+      },1500);
+    }
+  } else {
+    if(_tabInt){clearInterval(_tabInt);_tabInt=null;}
+    document.title=_baseTitle;
+    updateAlertBadge();
+  }
+});
+
+// ─── ARRANQUE ────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
