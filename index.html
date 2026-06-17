@@ -386,26 +386,20 @@ tr:hover td{background:var(--bg2)}
 
 <script>
 let DB = {
-  pedidos:[
-    {id:1,fecha_pedido:'2026-06-01',proveedor:'Proveedor Demo',cliente:'Cliente A',producto:'Shiitake fresco 500g',cajas:20,albaran:'ALB-001',fecha_albaran:'2026-06-03',factura:'FAC-001',fecha_factura:'2026-06-05',importe:840,cobro:'2026-06-15',notas:''},
-    {id:2,fecha_pedido:'2026-06-05',proveedor:'Proveedor Demo',cliente:'Cliente B',producto:'Shiitake seco 250g',cajas:15,albaran:'ALB-002',fecha_albaran:'2026-06-07',factura:'',fecha_factura:'',importe:0,cobro:'',notas:''},
-    {id:3,fecha_pedido:'2026-06-10',proveedor:'Proveedor Demo',cliente:'Cliente C',producto:'Shiitake fresco 1kg',cajas:30,albaran:'',fecha_albaran:'',factura:'',fecha_factura:'',importe:0,cobro:'',notas:'Urgente'},
-    {id:4,fecha_pedido:'2026-06-12',proveedor:'Proveedor Demo',cliente:'Cliente A',producto:'Shiitake seco 250g',cajas:10,albaran:'',fecha_albaran:'',factura:'',fecha_factura:'',importe:0,cobro:'',notas:''},
-  ],
+  pedidos:[],
   stock:[
-    {id:1,producto:'Shiitake fresco 500g',gama:'Setas frescas',cajas:45,cajas_min:10,notas:''},
-    {id:2,producto:'Shiitake fresco 1kg',gama:'Setas frescas',cajas:8,cajas_min:10,notas:''},
-    {id:3,producto:'Shiitake seco 250g',gama:'Setas secas',cajas:23,cajas_min:5,notas:''},
-    {id:4,producto:'Shiitake seco 100g',gama:'Setas secas',cajas:3,cajas_min:8,notas:'Stock crítico'},
+    {id:1,producto:'Shiitake original',gama:'Producto acabado',cajas:0,cajas_min:10,notas:''},
+    {id:2,producto:'Shiitake de sal',gama:'Producto acabado',cajas:0,cajas_min:10,notas:''},
+    {id:3,producto:'Shiitake picante',gama:'Producto acabado',cajas:0,cajas_min:10,notas:''},
+    {id:4,producto:'Caja embalaje 12 unidades',gama:'Embalaje',cajas:0,cajas_min:20,notas:''},
+    {id:5,producto:'Caja embalaje 30 unidades',gama:'Embalaje',cajas:0,cajas_min:20,notas:''},
   ],
   movimientos:[],
   contactos:[
-    {id:1,nombre:'Cliente A',tipo:'cliente',telefono:'93 111 22 33',email:'clientea@ejemplo.es',direccion:'Barcelona',notas:''},
-    {id:2,nombre:'Cliente B',tipo:'cliente',telefono:'93 222 33 44',email:'clienteb@ejemplo.es',direccion:'Girona',notas:''},
-    {id:3,nombre:'Cliente C',tipo:'cliente',telefono:'',email:'',direccion:'',notas:''},
-    {id:4,nombre:'Proveedor Demo',tipo:'proveedor',telefono:'91 444 55 66',email:'proveedor@demo.es',direccion:'Madrid',notas:''},
+    {id:1,nombre:'Shiitake',tipo:'proveedor',telefono:'',email:'',direccion:'',notas:'Proveedor de materia prima shiitake'},
+    {id:2,nombre:'Tarifa',tipo:'proveedor',telefono:'',email:'',direccion:'',notas:'Empaquetado del producto, cajas y accesorios'},
   ],
-  nid:{p:5,s:5,m:1,c:5}
+  nid:{p:1,s:6,m:1,c:3}
 };
 
 // ─── SUPABASE ─────────────────────────────────────────────────────────────────
