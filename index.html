@@ -441,8 +441,14 @@ const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZ
 const SB_HDR={'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'return=representation'};
 
 async function sbGet(t){try{const r=await fetch(`${SB_URL}/rest/v1/${t}?order=id`,{headers:SB_HDR});if(!r.ok)return null;return r.json();}catch{return null;}}
-async function sbInsert(t,obj){try{const{id,created_at,...d}=obj;const r=await fetch(`${SB_URL}/rest/v1/${t}`,{method:'POST',headers:SB_HDR,body:JSON.stringify(d)});if(!r.ok)return null;const res=await r.json();return Array.isArray(res)?res[0]:res;}catch{return null;}}
-async function sbUpdate(t,id,obj){try{const{id:_,created_at,...d}=obj;const r=await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`,{method:'PATCH',headers:SB_HDR,body:JSON.stringify(d)});if(!r.ok)return null;const res=await r.json();return Array.isArray(res)?res[0]:res;}catch{return null;}}
+async function sbInsert(t,obj){try{const{id,created_at,...d}=obj;const r=await fetch(`${SB_URL}/rest/v1/${t}`,{method:'POST',headers:SB_HDR,body:JSON.stringify(d)});if(!r.ok){const err=await r.json().catch(()=>({}));return{__error__:true,__body__:d,__msg__:err.message||''};}const res=await r.json();return Array.isArray(res)?res[0]:res;}catch{return null;}}
+async function sbUpdate(t,id,obj){try{const{id:_,created_at,...d}=obj;const r=await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`,{method:'PATCH',headers:SB_HDR,body:JSON.stringify(d)});if(!r.ok){const err=await r.json().catch(()=>({}));return{__error__:true,__body__:d,__msg__:err.message||''};}const res=await r.json();return Array.isArray(res)?res[0]:res;}catch{return null;}}
+
+// Guarda campos extra en localStorage si Supabase no tiene las columnas aún
+const _extraFields=['hora_recogida','hora_entrega','tarifa'];
+function _saveLocalExtra(pedidoId,obj){const ext={};_extraFields.forEach(f=>{if(obj[f]!=null&&obj[f]!=='')ext[f]=obj[f];});if(Object.keys(ext).length)localStorage.setItem('ped_ext_'+pedidoId,JSON.stringify(ext));}
+function _loadLocalExtra(pedidoId){try{return JSON.parse(localStorage.getItem('ped_ext_'+pedidoId)||'{}');}catch{return{};}}
+function _mergeExtra(pedidos){return pedidos.map(p=>{const ext=_loadLocalExtra(p.id);return Object.keys(ext).length?{...p,...ext}:p;});}
 async function sbDelete(t,id){try{await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`,{method:'DELETE',headers:{...SB_HDR,'Prefer':''}});}catch{}}
 
 function showLoading(m){let el=document.getElementById('sb-bar');if(!el){el=document.createElement('div');el.id='sb-bar';el.style.cssText='position:fixed;top:52px;left:0;right:0;background:var(--pri);color:#fff;text-align:center;padding:5px;font-size:12px;z-index:999';document.body.appendChild(el);}el.textContent=m;el.style.display='block';}
@@ -454,7 +460,7 @@ async function init(){
   document.getElementById('topdate').textContent=d.toLocaleDateString('es-ES',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
   showLoading('Cargando...');
   const[ped,stk,mov,con]=await Promise.all([sbGet('pedidos_shirake'),sbGet('stock_shirake'),sbGet('movimientos_shirake'),sbGet('contactos_shirake')]);
-  if(ped){DB.pedidos=ped;if(ped.length)DB.nid.p=Math.max(...ped.map(x=>x.id))+1;}
+  if(ped){DB.pedidos=_mergeExtra(ped);if(ped.length)DB.nid.p=Math.max(...ped.map(x=>x.id))+1;}
   if(stk&&stk.length){DB.stock=stk;DB.nid.s=Math.max(...stk.map(x=>x.id))+1;}
   if(mov&&mov.length){DB.movimientos=mov;DB.nid.m=Math.max(...mov.map(x=>x.id))+1;}
   if(con&&con.length){DB.contactos=con;DB.nid.c=Math.max(...con.map(x=>x.id))+1;}
@@ -711,17 +717,30 @@ async function savePedido(){
   };
   if(!obj.cliente){alert('El cliente es obligatorio');return;}
   showLoading('Guardando...');
+  // Función que reintenta sin campos extra si Supabase no tiene las columnas aún
+  async function _sbSafe(isEdit,eid,o){
+    const fn=isEdit?()=>sbUpdate('pedidos_shirake',eid,o):()=>sbInsert('pedidos_shirake',o);
+    let r=await fn();
+    if(r&&r.__error__){
+      if(r.__msg__&&_extraFields.some(f=>r.__msg__.includes(f))){
+        const{hora_recogida,hora_entrega,tarifa,...oSin}=o;
+        r=isEdit?await sbUpdate('pedidos_shirake',eid,oSin):await sbInsert('pedidos_shirake',oSin);
+        const savedId=isEdit?eid:(r&&r.id?r.id:null);
+        if(savedId) _saveLocalExtra(savedId,o);
+      } else r=null;
+    }
+    return r;
+  }
   if(_editPedId){
-    // Revertir stock del pedido anterior antes de aplicar el nuevo
     const anterior=DB.pedidos.find(x=>x.id===_editPedId);
     if(anterior) await adjustStock(getLineas(anterior),'sumar');
     await adjustStock(lineasList,'restar');
-    await sbUpdate('pedidos_shirake',_editPedId,obj);
+    await _sbSafe(true,_editPedId,obj);
     const i=DB.pedidos.findIndex(x=>x.id===_editPedId);
     if(i>=0)DB.pedidos[i]=obj;
   } else {
     await adjustStock(lineasList,'restar');
-    const res=await sbInsert('pedidos_shirake',obj);
+    const res=await _sbSafe(false,null,obj);
     if(res&&res.id)obj.id=res.id;
     DB.pedidos.push(obj);
     DB.nid.p=Math.max(DB.nid.p,obj.id+1);
