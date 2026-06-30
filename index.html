@@ -306,13 +306,10 @@ tr:hover td{background:var(--bg2)}
     <div class="msec">
       <div class="msec-title">📦 Líneas de pedido</div>
       <table class="lineas-tbl">
-        <thead><tr><th style="width:60%">Producto</th><th style="width:25%">Cajas</th><th style="width:15%"></th></tr></thead>
+        <thead><tr><th style="width:48%">Producto</th><th style="width:18%">Cajas</th><th style="width:22%">Tarifa €/caja</th><th style="width:12%"></th></tr></thead>
         <tbody id="lineas-body"></tbody>
       </table>
       <button type="button" class="add-linea" onclick="addLinea()">+ Añadir línea</button>
-      <div style="margin-top:10px;max-width:260px">
-        <div class="fl"><label>💶 Tarifa de producto (€/caja)</label><input type="number" id="i-tarifa" min="0" step="0.01" placeholder="0.00"></div>
-      </div>
     </div>
     <!-- Albarán -->
     <div class="msec">
@@ -445,7 +442,7 @@ async function sbInsert(t,obj){try{const{id,created_at,...d}=obj;const r=await f
 async function sbUpdate(t,id,obj){try{const{id:_,created_at,...d}=obj;const r=await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`,{method:'PATCH',headers:SB_HDR,body:JSON.stringify(d)});if(!r.ok){const err=await r.json().catch(()=>({}));return{__error__:true,__body__:d,__msg__:err.message||''};}const res=await r.json();return Array.isArray(res)?res[0]:res;}catch{return null;}}
 
 // Guarda campos extra en localStorage si Supabase no tiene las columnas aún
-const _extraFields=['hora_recogida','hora_entrega','tarifa'];
+const _extraFields=['hora_recogida','hora_entrega'];
 function _saveLocalExtra(pedidoId,obj){const ext={};_extraFields.forEach(f=>{if(obj[f]!=null&&obj[f]!=='')ext[f]=obj[f];});if(Object.keys(ext).length)localStorage.setItem('ped_ext_'+pedidoId,JSON.stringify(ext));}
 function _loadLocalExtra(pedidoId){try{return JSON.parse(localStorage.getItem('ped_ext_'+pedidoId)||'{}');}catch{return{};}}
 function _mergeExtra(pedidos){return pedidos.map(p=>{const ext=_loadLocalExtra(p.id);return Object.keys(ext).length?{...p,...ext}:p;});}
@@ -516,34 +513,49 @@ function getLineas(p){
 function getLineasForm(){
   return [...document.querySelectorAll('#lineas-body tr')].map(r=>({
     producto:(r.querySelector('[data-f="prod"]')||{}).value||'',
-    cajas:parseInt((r.querySelector('[data-f="cajas"]')||{}).value)||0
+    cajas:parseInt((r.querySelector('[data-f="cajas"]')||{}).value)||0,
+    tarifa:parseFloat((r.querySelector('[data-f="tarifa"]')||{}).value)||0
   })).filter(l=>l.producto||l.cajas);
+}
+
+function calcImporte(){
+  const total=getLineasForm().reduce((s,l)=>s+(l.cajas*(l.tarifa||0)),0);
+  const el=document.getElementById('i-imp');
+  if(el&&total>0) el.value=total.toFixed(2);
 }
 
 function renderLineas(lineas){
   document.getElementById('lineas-body').innerHTML='';
-  (lineas||[{producto:'',cajas:''}]).forEach(l=>_addLineaRow(l));
+  (lineas||[{producto:'',cajas:'',tarifa:''}]).forEach(l=>_addLineaRow(l));
 }
 
-function addLinea(){_addLineaRow({producto:'',cajas:''});}
+function addLinea(){_addLineaRow({producto:'',cajas:'',tarifa:''});}
 
 function _addLineaRow(l){
   const prods=DB.stock.map(s=>`<option value="${s.producto}"${s.producto===l.producto?' selected':''}>${s.producto}</option>`).join('');
   const tr=document.createElement('tr');
   tr.innerHTML=`
-    <td><select data-f="prod" style="width:100%"><option value="">— Seleccionar —</option>${prods}</select></td>
-    <td><input type="number" data-f="cajas" value="${l.cajas||''}" min="0" placeholder="0"></td>
-    <td><button type="button" class="del-linea" onclick="this.closest('tr').remove()">✕</button></td>`;
+    <td><select data-f="prod" style="width:100%" onchange="calcImporte()"><option value="">— Seleccionar —</option>${prods}</select></td>
+    <td><input type="number" data-f="cajas" value="${l.cajas||''}" min="0" placeholder="0" oninput="calcImporte()"></td>
+    <td><input type="number" data-f="tarifa" value="${l.tarifa||''}" min="0" step="0.01" placeholder="0.00" oninput="calcImporte()"></td>
+    <td><button type="button" class="del-linea" onclick="this.closest('tr').remove();calcImporte()">✕</button></td>`;
   document.getElementById('lineas-body').appendChild(tr);
 }
 
 function lineasDisplay(p){
   const ls=getLineas(p);
-  return ls.filter(l=>l.producto).map(l=>`<span>${l.producto}${l.cajas?' <strong style="color:var(--txt)">×'+l.cajas+'</strong>':''}</span>`).join('')||'<span style="color:var(--txt2)">—</span>';
+  return ls.filter(l=>l.producto).map(l=>{
+    const imp=l.cajas&&l.tarifa?` = ${(l.cajas*l.tarifa).toLocaleString('es-ES',{minimumFractionDigits:2})}€`:'';
+    return `<span>${l.producto} <strong style="color:var(--txt)">×${l.cajas||'—'}</strong>${l.tarifa?' · '+parseFloat(l.tarifa).toLocaleString('es-ES')+'€/caja':''}${imp}</span>`;
+  }).join('')||'<span style="color:var(--txt2)">—</span>';
 }
 
 function lineasTotalCajas(p){
   return getLineas(p).reduce((s,l)=>s+(parseInt(l.cajas)||0),0);
+}
+
+function lineasTotalImporte(p){
+  return getLineas(p).reduce((s,l)=>s+((parseInt(l.cajas)||0)*(parseFloat(l.tarifa)||0)),0);
 }
 
 // ─── AJUSTE STOCK AUTOMÁTICO ─────────────────────────────────────────────────
@@ -682,7 +694,6 @@ function openPedido(id){
   document.getElementById('i-hrecogida').value=p?p.hora_recogida||'':'';
   document.getElementById('i-hentrega').value=p?p.hora_entrega||'':'';
   document.getElementById('i-notas').value=p?p.notas||'':'';
-  document.getElementById('i-tarifa').value=p?p.tarifa||'':'';
   document.getElementById('i-alb').value=p?p.albaran||'':'';
   document.getElementById('i-falb').value=p?p.fecha_albaran||'':'';
   document.getElementById('i-fac').value=p?p.factura||'':'';
@@ -704,7 +715,6 @@ async function savePedido(){
     dir_entrega:document.getElementById('i-direnv').value.trim(),
     hora_recogida:document.getElementById('i-hrecogida').value,
     hora_entrega:document.getElementById('i-hentrega').value,
-    tarifa:parseFloat(document.getElementById('i-tarifa').value)||null,
     notas:document.getElementById('i-notas').value.trim(),
     lineas:lineasList.length?JSON.stringify(lineasList):'',
     cajas:totalCajas,
@@ -765,20 +775,45 @@ function sendWA(id){
   const p=DB.pedidos.find(x=>x.id===id);if(!p)return;
   const proc=getProceso(p);
   const ls=getLineas(p).filter(l=>l.producto);
-  const partes=[`🍄 *Mushbit's — Pedido*`,`🆔 *Ref:* ${genId(p)}`,'',`👤 *Cliente:* ${p.cliente||'—'}`];
+  const sep='━━━━━━━━━━━━━━━━━━━━━';
+  const partes=[
+    `🍄 *Mushbit's Shiitake Chips*`,
+    `📋 *Resumen de pedido*`,
+    sep,
+    `🆔 *Ref:* ${genId(p)}`,
+    `📅 *Fecha pedido:* ${fd(p.fecha_pedido)}`,
+    '',
+    `👤 *Cliente:* ${p.cliente||'—'}`,
+  ];
   if(p.dir_entrega) partes.push(`📍 *Dirección:* ${p.dir_entrega}`);
-  if(p.hora_recogida) partes.push(`🕐 *Recogida:* ${p.hora_recogida}`);
-  if(p.hora_entrega) partes.push(`🕑 *Entrega:* ${p.hora_entrega}`);
+  if(p.hora_recogida||p.hora_entrega){
+    let h='';
+    if(p.hora_recogida) h+=`🕐 Recogida: ${p.hora_recogida}`;
+    if(p.hora_recogida&&p.hora_entrega) h+='   ';
+    if(p.hora_entrega) h+=`🕑 Entrega: ${p.hora_entrega}`;
+    partes.push(h);
+  }
+  if(p.fecha_prevista) partes.push(`⏳ *Entrega prevista:* ${fd(p.fecha_prevista)}`);
+  partes.push('',`📦 *Productos:*`);
+  let totalCajas=0,totalImporte=0;
+  ls.forEach(l=>{
+    const c=parseInt(l.cajas)||0;
+    const t=parseFloat(l.tarifa)||0;
+    const sub=c*t;
+    totalCajas+=c;totalImporte+=sub;
+    let linea=`  • ${l.producto} — ${c} caja${c!==1?'s':''}`;
+    if(t) linea+=` × ${t.toLocaleString('es-ES',{minimumFractionDigits:2})}€ = ${sub.toLocaleString('es-ES',{minimumFractionDigits:2})}€`;
+    partes.push(linea);
+  });
   partes.push('');
-  ls.forEach(l=>partes.push(`📦 ${l.producto}${l.cajas?' — '+l.cajas+' cajas':''}`));
-  if(p.tarifa) partes.push(`💶 *Tarifa:* ${parseFloat(p.tarifa).toLocaleString('es-ES')} €/caja`);;
-  partes.push('',`📊 *Estado:* ${proc.label}`);
-  if(p.fecha_prevista) partes.push(`⏳ *Prevista:* ${fd(p.fecha_prevista)}`);
+  partes.push(`📦 *Total cajas:* ${totalCajas}`);
+  if(totalImporte>0) partes.push(`💶 *Total importe:* ${totalImporte.toLocaleString('es-ES',{minimumFractionDigits:2})} €`);
+  partes.push('',sep,`📊 *Estado:* ${proc.label}`);
   if(p.albaran) partes.push(`📄 *Albarán:* ${p.albaran}`);
-  if(p.factura) partes.push(`🧾 *Factura:* ${p.factura}${p.importe?' · '+p.importe.toLocaleString('es-ES')+' €':''}`);
+  if(p.factura) partes.push(`🧾 *Factura:* ${p.factura}${p.importe?' · '+parseFloat(p.importe).toLocaleString('es-ES',{minimumFractionDigits:2})+' €':''}`);
   if(p.cobro) partes.push(`✅ *Cobrado:* ${fd(p.cobro)}`);
-  if(p.notas) partes.push(`📝 *Notas:* ${p.notas}`);
-  partes.push('',`📅 *Fecha pedido:* ${fd(p.fecha_pedido)}`);
+  if(p.notas) partes.push('',`📝 *Notas:* ${p.notas}`);
+  partes.push(sep);
   const phone=getWAPhone();
   window.open((phone?`https://wa.me/${phone}?text=`:`https://wa.me/?text=`)+encodeURIComponent(partes.join('\n')),'_blank');
 }
