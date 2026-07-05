@@ -309,7 +309,8 @@ tr:hover td{background:var(--bg2)}
         <thead><tr><th style="width:48%">Producto</th><th style="width:18%">Cajas</th><th style="width:22%">Tarifa €/caja</th><th style="width:12%"></th></tr></thead>
         <tbody id="lineas-body"></tbody>
       </table>
-      <button type="button" class="add-linea" onclick="addLinea()">+ Añadir línea</button>
+      <button type="button" class="add-linea" onclick="addLinea()">+ Añadir producto</button>
+      <button type="button" class="add-linea" onclick="addLineaExtra()" style="background:#f0edf8;border-color:#c8b0e8;color:#6a3080;margin-top:4px">+ Añadir concepto extra</button>
     </div>
     <!-- Albarán -->
     <div class="msec">
@@ -512,9 +513,10 @@ function getLineas(p){
 
 function getLineasForm(){
   return [...document.querySelectorAll('#lineas-body tr')].map(r=>({
-    producto:(r.querySelector('[data-f="prod"]')||{}).value||'',
+    producto:(r.querySelector('[data-f="prod"]')||r.querySelector('[data-f="prod-txt"]')||{}).value||'',
     cajas:parseInt((r.querySelector('[data-f="cajas"]')||{}).value)||0,
-    tarifa:parseFloat((r.querySelector('[data-f="tarifa"]')||{}).value)||0
+    tarifa:parseFloat((r.querySelector('[data-f="tarifa"]')||{}).value)||0,
+    extra:!!r.querySelector('[data-f="prod-txt"]')
   })).filter(l=>l.producto||l.cajas);
 }
 
@@ -526,16 +528,28 @@ function calcImporte(){
 
 function renderLineas(lineas){
   document.getElementById('lineas-body').innerHTML='';
-  (lineas||[{producto:'',cajas:'',tarifa:''}]).forEach(l=>_addLineaRow(l));
+  (lineas||[{producto:'',cajas:'',tarifa:''}]).forEach(l=>l.extra?_addLineaExtraRow(l):_addLineaRow(l));
 }
 
 function addLinea(){_addLineaRow({producto:'',cajas:'',tarifa:''});}
+function addLineaExtra(){_addLineaExtraRow({producto:'',cajas:'',tarifa:''});}
 
 function _addLineaRow(l){
   const prods=DB.stock.map(s=>`<option value="${s.producto}"${s.producto===l.producto?' selected':''}>${s.producto}</option>`).join('');
   const tr=document.createElement('tr');
   tr.innerHTML=`
     <td><select data-f="prod" style="width:100%" onchange="calcImporte()"><option value="">— Seleccionar —</option>${prods}</select></td>
+    <td><input type="number" data-f="cajas" value="${l.cajas||''}" min="0" placeholder="0" oninput="calcImporte()"></td>
+    <td><input type="number" data-f="tarifa" value="${l.tarifa||''}" min="0" step="0.01" placeholder="0.00" oninput="calcImporte()"></td>
+    <td><button type="button" class="del-linea" onclick="this.closest('tr').remove();calcImporte()">✕</button></td>`;
+  document.getElementById('lineas-body').appendChild(tr);
+}
+
+function _addLineaExtraRow(l){
+  const tr=document.createElement('tr');
+  tr.style.background='#faf6ff';
+  tr.innerHTML=`
+    <td><input type="text" data-f="prod-txt" value="${l.producto||''}" placeholder="✏️ Concepto extra (escribe aquí)" style="width:100%;padding:5px 7px;font-size:12px;border:1px dashed #c8b0e8;border-radius:6px;font-family:inherit;outline:none;background:#f8f3ff" oninput="calcImporte()"></td>
     <td><input type="number" data-f="cajas" value="${l.cajas||''}" min="0" placeholder="0" oninput="calcImporte()"></td>
     <td><input type="number" data-f="tarifa" value="${l.tarifa||''}" min="0" step="0.01" placeholder="0.00" oninput="calcImporte()"></td>
     <td><button type="button" class="del-linea" onclick="this.closest('tr').remove();calcImporte()">✕</button></td>`;
