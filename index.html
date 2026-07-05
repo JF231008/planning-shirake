@@ -827,6 +827,7 @@ function sendWA(id){
   if(p.factura) partes.push(`🧾 *Factura:* ${p.factura}${p.importe?' · '+parseFloat(p.importe).toLocaleString('es-ES',{minimumFractionDigits:2})+' €':''}`);
   if(p.cobro) partes.push(`✅ *Cobrado:* ${fd(p.cobro)}`);
   if(p.notas) partes.push('',`📝 *Notas:* ${p.notas}`);
+  partes.push('',`🏭 *Horario almacén:* Lunes a viernes · 8:00 – 17:00`);
   partes.push(sep);
   const phone=getWAPhone();
   window.open((phone?`https://wa.me/${phone}?text=`:`https://wa.me/?text=`)+encodeURIComponent(partes.join('\n')),'_blank');
