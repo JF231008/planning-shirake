@@ -429,8 +429,8 @@ tr:hover td{background:var(--bg2)}
       📌 <strong>Formato:</strong> código de país + número sin espacios ni «+».<br>España → <strong>34</strong> seguido del número (ej: <strong>34612345678</strong>)
     </div>
     <div class="fl" style="margin-bottom:12px">
-      <label>🤖 Clave API OpenRouter — <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--pri)">openrouter.ai/keys</a> (gratis, sin tarjeta)</label>
-      <input type="password" id="i-claudekey" placeholder="sk-or-v1-..." style="font-size:13px;letter-spacing:1px">
+      <label>🤖 Clave API Groq — <a href="https://console.groq.com/keys" target="_blank" style="color:var(--pri)">console.groq.com/keys</a> (gratis, sin tarjeta)</label>
+      <input type="password" id="i-claudekey" placeholder="gsk_..." style="font-size:13px;letter-spacing:1px">
     </div>
     <div class="mbt">
       <button class="btn" onclick="closeModal()">Cancelar</button>
@@ -1079,21 +1079,13 @@ Si el nombre no coincide, usa el nombre tal como aparece en la factura.`;
       {type:'text',text:prompt},
       {type:'image_url',image_url:{url:`data:image/jpeg;base64,${b64}`}}
     ]}];
-    const freeModels=['microsoft/phi-4-multimodal-instruct:free','moonshotai/kimi-vl-a3b-thinking:free','mistralai/mistral-small-3.1-24b-instruct:free','google/gemma-3-27b-it:free'];
-    let data,lastErr;
-    for(const model of freeModels){
-      document.getElementById('ia-status').textContent=`🔍 Probando modelo ${model.split('/')[1].split(':')[0]}...`;
-      const r=await fetch('https://openrouter.ai/api/v1/chat/completions',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':'Bearer '+GEMINI_KEY,'HTTP-Referer':'https://jf231008.github.io/planning-shirake/','X-Title':'Mushbit Planning'},
-        body:JSON.stringify({model,messages,max_tokens:1024})
-      });
-      data=await r.json();
-      if(r.ok && data.choices?.[0]?.message?.content) break;
-      lastErr=data.error?.message||'Error '+r.status;
-      data=null;
-    }
-    if(!data)throw new Error(lastErr||'Ningún modelo disponible');
+    const resp=await fetch('https://api.groq.com/openai/v1/chat/completions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+GEMINI_KEY},
+      body:JSON.stringify({model:'llama-3.2-11b-vision-preview',messages,max_tokens:1024})
+    });
+    const data=await resp.json();
+    if(!resp.ok)throw new Error(data.error?.message||'Error '+resp.status);
     const raw=(data.choices?.[0]?.message?.content||'').trim();
     const match=raw.match(/\[[\s\S]*\]/);
     if(!match)throw new Error('La IA no devolvió un JSON válido');
