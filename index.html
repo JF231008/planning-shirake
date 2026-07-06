@@ -429,8 +429,8 @@ tr:hover td{background:var(--bg2)}
       📌 <strong>Formato:</strong> código de país + número sin espacios ni «+».<br>España → <strong>34</strong> seguido del número (ej: <strong>34612345678</strong>)
     </div>
     <div class="fl" style="margin-bottom:12px">
-      <label>🤖 Clave API de OpenRouter (para leer facturas con IA — gratuito)</label>
-      <input type="password" id="i-claudekey" placeholder="sk-or-v1-..." style="font-size:13px;letter-spacing:1px">
+      <label>🤖 Clave API de Claude (para leer facturas con IA)</label>
+      <input type="password" id="i-claudekey" placeholder="sk-ant-api03-..." style="font-size:13px;letter-spacing:1px">
     </div>
     <div class="mbt">
       <button class="btn" onclick="closeModal()">Cancelar</button>
@@ -1024,7 +1024,7 @@ function openIA(){
     document.getElementById('ia-status').innerHTML='❌ <strong>Abre la app desde HTTPS:</strong> <a href="https://jf231008.github.io/planning-shirake/" target="_blank" style="color:var(--pri);font-weight:600">jf231008.github.io/planning-shirake</a>';
     document.getElementById('ia-anabtn').disabled=true;
   } else if(!hasKey){
-    document.getElementById('ia-status').innerHTML='❌ <strong>Falta la clave API.</strong> Ve a ⚙️ Ajustes y guarda tu clave de OpenRouter (<a href="https://openrouter.ai/keys" target="_blank" style="color:var(--pri)">openrouter.ai/keys</a>).';
+    document.getElementById('ia-status').innerHTML='❌ <strong>Falta la clave API.</strong> Ve a ⚙️ Ajustes y guarda tu clave de Claude.';
     document.getElementById('ia-anabtn').disabled=true;
   } else {
     document.getElementById('ia-status').innerHTML='✅ Listo. Adjunta la factura y pulsa Analizar.';
@@ -1075,18 +1075,18 @@ Si el nombre no coincide, usa el nombre tal como aparece en la factura.`;
   }
   const parts=[{text:prompt},{inline_data:{mime_type:mimeType,data:b64}}];
   try{
-    const messages=[{role:'user',content:[
-      {type:'text',text:prompt},
-      {type:'image_url',image_url:{url:`data:${mimeType};base64,${b64}`}}
-    ]}];
-    const resp=await fetch('https://openrouter.ai/api/v1/chat/completions',{
+    const fileBlock=isPDF
+      ?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}
+      :{type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}};
+    const content=[{type:'text',text:prompt},fileBlock];
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+GEMINI_KEY,'HTTP-Referer':'https://jf231008.github.io/planning-shirake/','X-Title':'Mushbit Planning'},
-      body:JSON.stringify({model:'google/gemini-2.0-flash-exp:free',messages})
+      headers:{'Content-Type':'application/json','x-api-key':GEMINI_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1024,messages:[{role:'user',content}]})
     });
     const data=await resp.json();
     if(!resp.ok)throw new Error(data.error?.message||'Error '+resp.status);
-    const raw=(data.choices?.[0]?.message?.content||'').trim();
+    const raw=(data.content?.[0]?.text||'').trim();
     const match=raw.match(/\[[\s\S]*\]/);
     if(!match)throw new Error('La IA no devolvió un JSON válido');
     _iaLines=JSON.parse(match[0]);
