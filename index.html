@@ -364,6 +364,9 @@ tr:hover td{background:var(--bg2)}
       <div class="fl"><label>Gama / Categoría</label><input type="text" id="i-sgama" placeholder="Ej: Producto acabado"></div>
       <div class="fl"><label>Stock actual (cajas)</label><input type="number" id="i-scajas" min="0" placeholder="0"></div>
       <div class="fl"><label>Mínimo de alerta (cajas)</label><input type="number" id="i-smin" min="0" placeholder="10"></div>
+      <div class="fl"><label>Nº Lote</label><input type="text" id="i-slote" placeholder="Ej: L-2024-001"></div>
+      <div class="fl"><label>Referencia / Ítem</label><input type="text" id="i-sref" placeholder="Ej: SHK-ORG-001"></div>
+      <div class="fl"><label>Caducidad</label><input type="date" id="i-scaducidad"></div>
       <div class="fl fgf"><label>Notas</label><textarea id="i-snotas" placeholder="Observaciones"></textarea></div>
     </div>
     <div class="mbt">
@@ -463,6 +466,10 @@ const _extraFields=['hora_recogida','hora_entrega','alm_dias','alm_desde','alm_h
 function _saveLocalExtra(pedidoId,obj){const ext={};_extraFields.forEach(f=>{if(obj[f]!=null&&obj[f]!=='')ext[f]=obj[f];});if(Object.keys(ext).length)localStorage.setItem('ped_ext_'+pedidoId,JSON.stringify(ext));}
 function _loadLocalExtra(pedidoId){try{return JSON.parse(localStorage.getItem('ped_ext_'+pedidoId)||'{}');}catch{return{};}}
 function _mergeExtra(pedidos){return pedidos.map(p=>{const ext=_loadLocalExtra(p.id);return Object.keys(ext).length?{...p,...ext}:p;});}
+const _stkExtraFields=['lote','referencia','caducidad'];
+function _saveStkExtra(stkId,obj){const ext={};_stkExtraFields.forEach(f=>{if(obj[f]!=null&&obj[f]!=='')ext[f]=obj[f];});if(Object.keys(ext).length)localStorage.setItem('stk_ext_'+stkId,JSON.stringify(ext));}
+function _loadStkExtra(stkId){try{return JSON.parse(localStorage.getItem('stk_ext_'+stkId)||'{}');}catch{return{};}}
+function _mergeStkExtra(stocks){return stocks.map(s=>{const ext=_loadStkExtra(s.id);return Object.keys(ext).length?{...s,...ext}:s;});}
 async function sbDelete(t,id){try{await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`,{method:'DELETE',headers:{...SB_HDR,'Prefer':''}});}catch{}}
 
 function showLoading(m){let el=document.getElementById('sb-bar');if(!el){el=document.createElement('div');el.id='sb-bar';el.style.cssText='position:fixed;top:52px;left:0;right:0;background:var(--pri);color:#fff;text-align:center;padding:5px;font-size:12px;z-index:999';document.body.appendChild(el);}el.textContent=m;el.style.display='block';}
@@ -475,7 +482,7 @@ async function init(){
   showLoading('Cargando...');
   const[ped,stk,mov,con]=await Promise.all([sbGet('pedidos_shirake'),sbGet('stock_shirake'),sbGet('movimientos_shirake'),sbGet('contactos_shirake')]);
   if(ped){DB.pedidos=_mergeExtra(ped);if(ped.length)DB.nid.p=Math.max(...ped.map(x=>x.id))+1;}
-  if(stk&&stk.length){DB.stock=stk;DB.nid.s=Math.max(...stk.map(x=>x.id))+1;}
+  if(stk&&stk.length){DB.stock=_mergeStkExtra(stk);DB.nid.s=Math.max(...stk.map(x=>x.id))+1;}
   if(mov&&mov.length){DB.movimientos=mov;DB.nid.m=Math.max(...mov.map(x=>x.id))+1;}
   if(con&&con.length){DB.contactos=con;DB.nid.c=Math.max(...con.map(x=>x.id))+1;}
   hideLoading();
@@ -875,9 +882,10 @@ function rStock(){
     const lv=stockLevel(s);
     return `<div class="scard ${lv}">
       <div class="scard-name">${s.producto||'—'}</div>
-      <div class="scard-gama">${s.gama||'Sin categoría'}</div>
+      <div class="scard-gama">${s.gama||'Sin categoría'}${s.referencia?' · <span style="font-size:10px;color:#888">Ref: '+s.referencia+'</span>':''}</div>
       <div class="scard-cajas" style="color:${lvlColor[lv]}">${s.cajas}</div>
       <div class="scard-min">${lvlIco[lv]} ${lvlTxt[lv]} · Mín: ${s.cajas_min} cajas</div>
+      ${(s.lote||s.caducidad)?`<div style="font-size:11px;color:#888;margin-top:2px">${s.lote?'🏷 Lote: <strong>'+s.lote+'</strong>':''}${s.lote&&s.caducidad?' &nbsp;·&nbsp; ':''}${s.caducidad?'📅 Cad: <strong>'+fd(s.caducidad)+'</strong>':''}</div>`:''}
       <div class="scard-actions">
         <button class="btn sm entrada" onclick="openMovimiento(${s.id},'entrada')">+ Entrada</button>
         <button class="btn sm salida" onclick="openMovimiento(${s.id},'salida')">− Salida</button>
@@ -898,17 +906,34 @@ function openStock(id){
   document.getElementById('i-sgama').value=s?s.gama||'':'';
   document.getElementById('i-scajas').value=s?s.cajas||0:'';
   document.getElementById('i-smin').value=s?s.cajas_min||10:'10';
+  document.getElementById('i-slote').value=s?s.lote||'':'';
+  document.getElementById('i-sref').value=s?s.referencia||'':'';
+  document.getElementById('i-scaducidad').value=s?s.caducidad||'':'';
   document.getElementById('i-snotas').value=s?s.notas||'':'';
 }
 async function saveStock(){
-  const obj={id:_editStkId||DB.nid.s,producto:document.getElementById('i-sprod').value.trim(),gama:document.getElementById('i-sgama').value.trim(),cajas:parseInt(document.getElementById('i-scajas').value)||0,cajas_min:parseInt(document.getElementById('i-smin').value)||10,notas:document.getElementById('i-snotas').value.trim()};
+  const obj={id:_editStkId||DB.nid.s,producto:document.getElementById('i-sprod').value.trim(),gama:document.getElementById('i-sgama').value.trim(),cajas:parseInt(document.getElementById('i-scajas').value)||0,cajas_min:parseInt(document.getElementById('i-smin').value)||10,lote:document.getElementById('i-slote').value.trim(),referencia:document.getElementById('i-sref').value.trim(),caducidad:document.getElementById('i-scaducidad').value,notas:document.getElementById('i-snotas').value.trim()};
   if(!obj.producto){alert('El nombre del producto es obligatorio');return;}
   showLoading('Guardando...');
+  async function _stkSafe(isEdit,eid,o){
+    const fn=isEdit?()=>sbUpdate('stock_shirake',eid,o):()=>sbInsert('stock_shirake',o);
+    let r=await fn();
+    if(r&&r.__error__){
+      if(r.__msg__&&_stkExtraFields.some(f=>r.__msg__.includes(f))){
+        const{lote,referencia,caducidad,...oSin}=o;
+        r=isEdit?await sbUpdate('stock_shirake',eid,oSin):await sbInsert('stock_shirake',oSin);
+        const savedId=isEdit?eid:(r&&r.id?r.id:null);
+        if(savedId) _saveStkExtra(savedId,o);
+      } else r=null;
+    }
+    return r;
+  }
   if(_editStkId){
-    await sbUpdate('stock_shirake',_editStkId,obj);
+    await _stkSafe(true,_editStkId,obj);
+    _saveStkExtra(_editStkId,obj);
     const i=DB.stock.findIndex(x=>x.id===_editStkId);if(i>=0)DB.stock[i]=obj;
   } else {
-    const res=await sbInsert('stock_shirake',obj);
+    const res=await _stkSafe(false,null,obj);
     if(res&&res.id)obj.id=res.id;
     DB.stock.push(obj);DB.nid.s=Math.max(DB.nid.s,obj.id+1);
   }
