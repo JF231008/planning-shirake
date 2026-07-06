@@ -300,6 +300,22 @@ tr:hover td{background:var(--bg2)}
       <div class="fl fgf"><label>Dirección de entrega</label><input type="text" id="i-direnv" placeholder="Dirección donde se entregará el pedido"></div>
       <div class="fl"><label>🕐 Horario de recogida</label><input type="time" id="i-hrecogida"></div>
       <div class="fl"><label>🕑 Horario de entrega</label><input type="time" id="i-hentrega"></div>
+      <div class="fl fgf" style="flex-basis:100%">
+        <label>🏭 Horario almacén mercancía</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="i-alm-dias" style="flex:1;min-width:160px;padding:7px 10px;border:1px solid #d8c8b8;border-radius:8px;background:#fff;font-size:0.93rem">
+            <option value="">— Sin especificar —</option>
+            <option value="Lunes a Viernes">Lunes a Viernes</option>
+            <option value="Lunes a Sábado">Lunes a Sábado</option>
+            <option value="Lunes a Domingo">Lunes a Domingo</option>
+            <option value="Martes a Sábado">Martes a Sábado</option>
+          </select>
+          <span style="white-space:nowrap;color:#888;font-size:0.9rem">De</span>
+          <input type="time" id="i-alm-desde" style="width:110px">
+          <span style="color:#888;font-size:0.9rem">a</span>
+          <input type="time" id="i-alm-hasta" style="width:110px">
+        </div>
+      </div>
       <div class="fl fgf"><label>Notas</label><input type="text" id="i-notas" placeholder="Observaciones"></div>
     </div>
     <!-- Líneas de productos -->
@@ -443,7 +459,7 @@ async function sbInsert(t,obj){try{const{id,created_at,...d}=obj;const r=await f
 async function sbUpdate(t,id,obj){try{const{id:_,created_at,...d}=obj;const r=await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`,{method:'PATCH',headers:SB_HDR,body:JSON.stringify(d)});if(!r.ok){const err=await r.json().catch(()=>({}));return{__error__:true,__body__:d,__msg__:err.message||''};}const res=await r.json();return Array.isArray(res)?res[0]:res;}catch{return null;}}
 
 // Guarda campos extra en localStorage si Supabase no tiene las columnas aún
-const _extraFields=['hora_recogida','hora_entrega'];
+const _extraFields=['hora_recogida','hora_entrega','alm_dias','alm_desde','alm_hasta'];
 function _saveLocalExtra(pedidoId,obj){const ext={};_extraFields.forEach(f=>{if(obj[f]!=null&&obj[f]!=='')ext[f]=obj[f];});if(Object.keys(ext).length)localStorage.setItem('ped_ext_'+pedidoId,JSON.stringify(ext));}
 function _loadLocalExtra(pedidoId){try{return JSON.parse(localStorage.getItem('ped_ext_'+pedidoId)||'{}');}catch{return{};}}
 function _mergeExtra(pedidos){return pedidos.map(p=>{const ext=_loadLocalExtra(p.id);return Object.keys(ext).length?{...p,...ext}:p;});}
@@ -675,6 +691,7 @@ function rPedidos(){
       </div>
       ${p.dir_entrega?`<div class="vcard-row">📍 <strong>${p.dir_entrega}</strong></div>`:''}
       ${(p.hora_recogida||p.hora_entrega)?`<div class="vcard-row">${p.hora_recogida?'🕐 Recogida: <strong>'+p.hora_recogida+'</strong>':''}${p.hora_recogida&&p.hora_entrega?' &nbsp;·&nbsp; ':''}${p.hora_entrega?'🕑 Entrega: <strong>'+p.hora_entrega+'</strong>':''}</div>`:''}
+      ${(p.alm_dias||p.alm_desde)?`<div class="vcard-row">🏭 Almacén: <strong>${[p.alm_dias,p.alm_desde&&p.alm_hasta?p.alm_desde+' – '+p.alm_hasta:p.alm_desde||''].filter(Boolean).join(' · ')}</strong></div>`:''}
       ${ls.map(l=>`<div class="vcard-row">📦 <strong>${l.producto}</strong>${l.cajas?' · '+l.cajas+' cajas':''}</div>`).join('')}
       ${p.tarifa?`<div class="vcard-row">💶 Tarifa: <strong>${parseFloat(p.tarifa).toLocaleString('es-ES')} €/caja</strong></div>`:''}
       <div class="vcard-row">
@@ -707,6 +724,9 @@ function openPedido(id){
   document.getElementById('i-direnv').value=p?p.dir_entrega||'':'';
   document.getElementById('i-hrecogida').value=p?p.hora_recogida||'':'';
   document.getElementById('i-hentrega').value=p?p.hora_entrega||'':'';
+  document.getElementById('i-alm-dias').value=p?p.alm_dias||'':'';
+  document.getElementById('i-alm-desde').value=p?p.alm_desde||'':'';
+  document.getElementById('i-alm-hasta').value=p?p.alm_hasta||'':'';
   document.getElementById('i-notas').value=p?p.notas||'':'';
   document.getElementById('i-alb').value=p?p.albaran||'':'';
   document.getElementById('i-falb').value=p?p.fecha_albaran||'':'';
@@ -729,6 +749,9 @@ async function savePedido(){
     dir_entrega:document.getElementById('i-direnv').value.trim(),
     hora_recogida:document.getElementById('i-hrecogida').value,
     hora_entrega:document.getElementById('i-hentrega').value,
+    alm_dias:document.getElementById('i-alm-dias').value,
+    alm_desde:document.getElementById('i-alm-desde').value,
+    alm_hasta:document.getElementById('i-alm-hasta').value,
     notas:document.getElementById('i-notas').value.trim(),
     lineas:lineasList.length?JSON.stringify(lineasList):'',
     cajas:totalCajas,
@@ -747,7 +770,7 @@ async function savePedido(){
     let r=await fn();
     if(r&&r.__error__){
       if(r.__msg__&&_extraFields.some(f=>r.__msg__.includes(f))){
-        const{hora_recogida,hora_entrega,tarifa,...oSin}=o;
+        const{hora_recogida,hora_entrega,tarifa,alm_dias,alm_desde,alm_hasta,...oSin}=o;
         r=isEdit?await sbUpdate('pedidos_shirake',eid,oSin):await sbInsert('pedidos_shirake',oSin);
         const savedId=isEdit?eid:(r&&r.id?r.id:null);
         if(savedId) _saveLocalExtra(savedId,o);
@@ -827,7 +850,13 @@ function sendWA(id){
   if(p.factura) partes.push(`🧾 *Factura:* ${p.factura}${p.importe?' · '+parseFloat(p.importe).toLocaleString('es-ES',{minimumFractionDigits:2})+' €':''}`);
   if(p.cobro) partes.push(`✅ *Cobrado:* ${fd(p.cobro)}`);
   if(p.notas) partes.push('',`📝 *Notas:* ${p.notas}`);
-  partes.push('',`🏭 *Horario almacén:* Lunes a viernes · 8:00 – 17:00`);
+  if(p.alm_dias||p.alm_desde){
+    let alm=`🏭 *Horario almacén mercancía:*`;
+    if(p.alm_dias) alm+=` ${p.alm_dias}`;
+    if(p.alm_desde&&p.alm_hasta) alm+=` · ${p.alm_desde} – ${p.alm_hasta}`;
+    else if(p.alm_desde) alm+=` · desde ${p.alm_desde}`;
+    partes.push('',alm);
+  }
   partes.push(sep);
   const phone=getWAPhone();
   window.open((phone?`https://wa.me/${phone}?text=`:`https://wa.me/?text=`)+encodeURIComponent(partes.join('\n')),'_blank');
