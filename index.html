@@ -1015,9 +1015,14 @@ function openIA(){
   document.getElementById('ia-result').style.display='none';
   document.getElementById('ia-result').innerHTML='';
   document.getElementById('ia-apply').style.display='none';
-  document.getElementById('ia-status').textContent='';
   document.getElementById('ia-anabtn').disabled=false;
   _iaLines=[];
+  if(location.protocol==='file:'){
+    document.getElementById('ia-status').innerHTML='⚠️ Esta función requiere conexión HTTPS. Abre la app en: <a href="https://jf231008.github.io/planning-shirake/" target="_blank" style="color:var(--pri);font-weight:600">jf231008.github.io/planning-shirake</a>';
+    document.getElementById('ia-anabtn').disabled=true;
+  } else {
+    document.getElementById('ia-status').textContent='';
+  }
 }
 async function analizarFactura(){
   const CLAUDE_KEY=getClaudeKey();
