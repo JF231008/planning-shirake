@@ -1050,13 +1050,34 @@ Reglas:
 - "caducidad": fecha de caducidad en formato YYYY-MM-DD si aparece, si no ""
 Productos que tenemos en stock (intenta hacer coincidir el nombre exacto si es posible): ${productosConocidos}
 Si el nombre no coincide, usa el nombre tal como aparece en la factura.`;
-  const b64=await new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result.split(',')[1]);r.readAsDataURL(file);});
-  const mimeType=file.type||'image/jpeg';
+  const isPDF=file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf');
+  let b64,mimeType;
+  if(isPDF){
+    b64=await new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result.split(',')[1]);r.readAsDataURL(file);});
+    mimeType='application/pdf';
+  } else {
+    // Comprimir imagen a máx 1024px para reducir tamaño
+    b64=await new Promise(res=>{
+      const img=new Image();
+      const url=URL.createObjectURL(file);
+      img.onload=()=>{
+        let{width,height}=img;
+        const max=1024;
+        if(width>max||height>max){const r=Math.min(max/width,max/height);width=Math.round(width*r);height=Math.round(height*r);}
+        const cv=document.createElement('canvas');cv.width=width;cv.height=height;
+        cv.getContext('2d').drawImage(img,0,0,width,height);
+        URL.revokeObjectURL(url);
+        res(cv.toDataURL('image/jpeg',0.85).split(',')[1]);
+      };
+      img.src=url;
+    });
+    mimeType='image/jpeg';
+  }
   const parts=[{text:prompt},{inline_data:{mime_type:mimeType,data:b64}}];
   try{
-    const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,{
+    const resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{'Content-Type':'application/json','x-goog-api-key':GEMINI_KEY},
       body:JSON.stringify({contents:[{parts}]})
     });
     const data=await resp.json();
