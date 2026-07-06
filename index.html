@@ -238,6 +238,7 @@ tr:hover td{background:var(--bg2)}
   <div id="page-stock" class="page">
     <div class="toolbar">
       <input type="search" id="ss" placeholder="🔍 Buscar producto..." oninput="rStock()">
+      <button class="btn" onclick="openIA()" style="background:#f0edf8;border-color:#c8b0e8;color:#6a3080">📄 Leer factura IA</button>
       <button class="btn p" onclick="openStock()">+ Nuevo producto</button>
     </div>
     <div id="sgrid" class="stock-grid"></div>
@@ -427,9 +428,36 @@ tr:hover td{background:var(--bg2)}
     <div style="font-size:11px;color:var(--txt2);background:var(--pri-l);border:1px solid #f0c8a8;border-radius:8px;padding:10px 12px;margin-bottom:14px">
       📌 <strong>Formato:</strong> código de país + número sin espacios ni «+».<br>España → <strong>34</strong> seguido del número (ej: <strong>34612345678</strong>)
     </div>
+    <div class="fl" style="margin-bottom:12px">
+      <label>🤖 Clave API de Claude (para leer facturas con IA)</label>
+      <input type="password" id="i-claudekey" placeholder="sk-ant-api03-..." style="font-size:13px;letter-spacing:1px">
+    </div>
     <div class="mbt">
       <button class="btn" onclick="closeModal()">Cancelar</button>
       <button class="btn p" onclick="saveSettings()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal IA -->
+<div id="iaov" class="ov" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-title"><span>📄 Leer factura con IA</span><button class="btn sm" onclick="closeModal()">✕</button></div>
+    <div style="margin-bottom:12px">
+      <label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:6px">Opción 1 — Pega el texto del PDF</label>
+      <textarea id="ia-txt" style="width:100%;height:110px;font-size:0.85rem;border:1px solid #d8c8b8;border-radius:8px;padding:8px;box-sizing:border-box;resize:vertical" placeholder="Copia y pega aquí el texto de la factura..."></textarea>
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:6px">Opción 2 — Sube una foto o imagen</label>
+      <input type="file" id="ia-img" accept="image/*">
+    </div>
+    <div id="ia-status" style="font-size:0.9rem;min-height:22px;color:var(--pri);margin-bottom:6px"></div>
+    <div id="ia-result" style="display:none;overflow-x:auto;margin-bottom:10px"></div>
+    <div class="mbt">
+      <button class="btn p" id="ia-apply" onclick="aplicarFactura()" style="display:none;background:#2e7d32;border-color:#2e7d32">✅ Aplicar al stock</button>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal()">Cerrar</button>
+      <button class="btn p" id="ia-anabtn" onclick="analizarFactura()">🔍 Analizar factura</button>
     </div>
   </div>
 </div>
@@ -455,6 +483,7 @@ let DB={
 // ─── SUPABASE ────────────────────────────────────────────────────────────────
 const SB_URL='https://civblohkumiqpofhodah.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpdmJsb2hrdW1pcXBvZmhvZGFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MDQzMTUsImV4cCI6MjA5NzI4MDMxNX0.dwO9-9Y-j-k5okgX14wamgfUH4njPVdmJ1wnrO2zysE';
+function getClaudeKey(){return localStorage.getItem('shi_claude_key')||'';}
 const SB_HDR={'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'return=representation'};
 
 async function sbGet(t){try{const r=await fetch(`${SB_URL}/rest/v1/${t}?order=id`,{headers:SB_HDR});if(!r.ok)return null;return r.json();}catch{return null;}}
@@ -492,7 +521,7 @@ async function init(){
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 function today(){return new Date().toISOString().slice(0,10);}
 function fd(d){if(!d)return '';try{const[y,m,dd]=d.split('-');return dd+'/'+m+'/'+y;}catch{return d;}}
-function closeModal(){['pedov','stkov','movov','conov','setov'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});}
+function closeModal(){['pedov','stkov','movov','conov','setov','iaov'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 
 function showPage(n){
@@ -977,6 +1006,125 @@ async function saveMovimiento(){
   hideLoading();closeModal();rStock();rAlertas();updateAlertBadge();
 }
 
+// ─── IA FACTURA ──────────────────────────────────────────────────────────────
+let _iaLines=[];
+function openIA(){
+  document.getElementById('iaov').style.display='flex';
+  document.getElementById('ia-txt').value='';
+  document.getElementById('ia-img').value='';
+  document.getElementById('ia-result').style.display='none';
+  document.getElementById('ia-result').innerHTML='';
+  document.getElementById('ia-apply').style.display='none';
+  document.getElementById('ia-status').textContent='';
+  document.getElementById('ia-anabtn').disabled=false;
+  _iaLines=[];
+}
+async function analizarFactura(){
+  const CLAUDE_KEY=getClaudeKey();
+  if(!CLAUDE_KEY){alert('Introduce la clave de API de Claude en ⚙️ Ajustes primero');return;}
+  const txt=document.getElementById('ia-txt').value.trim();
+  const imgFile=document.getElementById('ia-img').files[0];
+  if(!txt&&!imgFile){alert('Pega el texto de la factura o sube una imagen');return;}
+  document.getElementById('ia-status').textContent='🔍 Analizando con IA...';
+  document.getElementById('ia-anabtn').disabled=true;
+  document.getElementById('ia-result').style.display='none';
+  document.getElementById('ia-apply').style.display='none';
+  const productosConocidos=DB.stock.map(s=>s.producto).join(', ');
+  const prompt=`Eres un asistente que extrae datos de facturas de proveedores de alimentos.
+Analiza la factura y devuelve ÚNICAMENTE un array JSON (sin texto extra, sin markdown, sin bloques de código) con este formato:
+[{"producto":"nombre","cajas":0,"lote":"","referencia":"","caducidad":""}]
+Reglas:
+- "cajas": número entero de unidades/cajas entregadas (busca cantidades, unidades, bultos, uds)
+- "lote": número de lote si aparece, si no ""
+- "referencia": código de artículo o referencia si aparece, si no ""
+- "caducidad": fecha de caducidad en formato YYYY-MM-DD si aparece, si no ""
+Productos que tenemos en stock (intenta hacer coincidir el nombre exacto si es posible): ${productosConocidos}
+Si el nombre no coincide, usa el nombre tal como aparece en la factura.`;
+  let content;
+  if(imgFile){
+    const b64=await new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result.split(',')[1]);r.readAsDataURL(imgFile);});
+    content=[{type:'text',text:prompt},{type:'image',source:{type:'base64',media_type:imgFile.type,data:b64}}];
+  } else {
+    content=prompt+'\n\nFACTURA:\n'+txt;
+  }
+  try{
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1024,messages:[{role:'user',content}]})
+    });
+    const data=await resp.json();
+    if(!resp.ok)throw new Error(data.error?.message||'Error '+resp.status);
+    const raw=(data.content[0].text||'').trim();
+    const match=raw.match(/\[[\s\S]*\]/);
+    if(!match)throw new Error('La IA no devolvió un JSON válido');
+    _iaLines=JSON.parse(match[0]);
+    renderIAResult();
+  }catch(e){
+    document.getElementById('ia-status').textContent='❌ Error: '+e.message;
+  }
+  document.getElementById('ia-anabtn').disabled=false;
+}
+function renderIAResult(){
+  if(!_iaLines.length){document.getElementById('ia-status').textContent='⚠️ No se detectaron productos';return;}
+  document.getElementById('ia-status').textContent=`✅ ${_iaLines.length} línea${_iaLines.length!==1?'s':''} detectada${_iaLines.length!==1?'s':''}. Revisa y ajusta si es necesario.`;
+  const rows=_iaLines.map((l,i)=>{
+    const match=DB.stock.find(s=>s.producto.toLowerCase()===l.producto.toLowerCase());
+    const tag=match?'':`<span style="background:#fff3cd;color:#856404;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:4px">Sin coincidencia</span>`;
+    return `<tr style="border-bottom:1px solid #eee">
+      <td style="padding:5px 6px"><input type="checkbox" id="ia-chk-${i}" checked></td>
+      <td style="padding:5px 6px;font-size:0.85rem">${l.producto}${tag}</td>
+      <td style="padding:5px 4px"><input type="number" id="ia-c-${i}" value="${l.cajas||0}" min="0" style="width:56px;text-align:center;padding:3px;border:1px solid #d8c8b8;border-radius:6px"></td>
+      <td style="padding:5px 4px"><input type="text" id="ia-l-${i}" value="${l.lote||''}" placeholder="—" style="width:80px;padding:3px;border:1px solid #d8c8b8;border-radius:6px;font-size:0.82rem"></td>
+      <td style="padding:5px 4px"><input type="text" id="ia-r-${i}" value="${l.referencia||''}" placeholder="—" style="width:75px;padding:3px;border:1px solid #d8c8b8;border-radius:6px;font-size:0.82rem"></td>
+      <td style="padding:5px 4px"><input type="date" id="ia-d-${i}" value="${l.caducidad||''}" style="width:130px;padding:3px;border:1px solid #d8c8b8;border-radius:6px;font-size:0.82rem"></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('ia-result').innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+    <thead><tr style="background:#f5f0eb;font-size:0.8rem">
+      <th style="padding:5px 6px;text-align:left">✓</th>
+      <th style="padding:5px 6px;text-align:left">Producto</th>
+      <th style="padding:5px 4px;text-align:center">Cajas</th>
+      <th style="padding:5px 4px;text-align:left">Lote</th>
+      <th style="padding:5px 4px;text-align:left">Ref</th>
+      <th style="padding:5px 4px;text-align:left">Caducidad</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+  document.getElementById('ia-result').style.display='';
+  document.getElementById('ia-apply').style.display='';
+}
+async function aplicarFactura(){
+  showLoading('Actualizando stock...');
+  let aplicados=0;
+  const fecha=today();
+  for(let i=0;i<_iaLines.length;i++){
+    if(!document.getElementById('ia-chk-'+i)?.checked)continue;
+    const cajas=parseInt(document.getElementById('ia-c-'+i)?.value)||0;
+    const lote=(document.getElementById('ia-l-'+i)?.value||'').trim();
+    const ref=(document.getElementById('ia-r-'+i)?.value||'').trim();
+    const cad=document.getElementById('ia-d-'+i)?.value||'';
+    const nombre=_iaLines[i].producto;
+    const s=DB.stock.find(x=>x.producto.toLowerCase()===nombre.toLowerCase());
+    if(!s)continue;
+    if(cajas>0){
+      const mov={id:DB.nid.m,stock_id:s.id,tipo:'entrada',cajas,fecha,ref:'Factura IA',notas:nombre};
+      const mr=await sbInsert('movimientos_shirake',mov);
+      if(mr&&mr.id)mov.id=mr.id;
+      DB.movimientos.push(mov);DB.nid.m=Math.max(DB.nid.m,mov.id+1);
+    }
+    const updated={...s,cajas:s.cajas+(cajas>0?cajas:0),lote:lote||s.lote||'',referencia:ref||s.referencia||'',caducidad:cad||s.caducidad||''};
+    await _stkSafe(true,s.id,updated);
+    _saveStkExtra(s.id,updated);
+    const idx=DB.stock.findIndex(x=>x.id===s.id);if(idx>=0)DB.stock[idx]=updated;
+    aplicados++;
+  }
+  hideLoading();
+  document.getElementById('ia-status').textContent=aplicados>0?`✅ ${aplicados} producto${aplicados!==1?'s':''} actualizado${aplicados!==1?'s':''}. Stock al día.`:'⚠️ No se aplicó ningún cambio (sin coincidencias en stock)';
+  document.getElementById('ia-apply').style.display='none';
+  rStock();rAlertas();updateAlertBadge();
+}
+
 // ─── ALERTAS ─────────────────────────────────────────────────────────────────
 function getAlertCount(){
   return DB.stock.filter(s=>s.cajas<=s.cajas_min).length+DB.pedidos.filter(p=>getProceso(p).step<5).length;
@@ -1090,11 +1238,17 @@ async function delContacto(id){
 function delContactoEdit(){if(_editConId)delContacto(_editConId);}
 
 // ─── SETTINGS ────────────────────────────────────────────────────────────────
-function openSettings(){document.getElementById('i-waphone').value=getWAPhone();document.getElementById('setov').style.display='flex';}
+function openSettings(){
+  document.getElementById('i-waphone').value=getWAPhone();
+  document.getElementById('i-claudekey').value=getClaudeKey();
+  document.getElementById('setov').style.display='flex';
+}
 function saveSettings(){
   const val=(document.getElementById('i-waphone').value||'').trim().replace(/\D/g,'');
   if(val)localStorage.setItem('shi_wa_phone',val);else localStorage.removeItem('shi_wa_phone');
-  closeModal();alert(val?`✅ Número guardado: +${val}`:'✅ Ajustes guardados');
+  const ck=(document.getElementById('i-claudekey').value||'').trim();
+  if(ck)localStorage.setItem('shi_claude_key',ck);else localStorage.removeItem('shi_claude_key');
+  closeModal();alert('✅ Ajustes guardados');
 }
 
 // ─── NOTIFICACIÓN PESTAÑA ────────────────────────────────────────────────────
