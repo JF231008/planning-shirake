@@ -429,8 +429,8 @@ tr:hover td{background:var(--bg2)}
       📌 <strong>Formato:</strong> código de país + número sin espacios ni «+».<br>España → <strong>34</strong> seguido del número (ej: <strong>34612345678</strong>)
     </div>
     <div class="fl" style="margin-bottom:12px">
-      <label>🤖 Clave API de Claude (para leer facturas con IA)</label>
-      <input type="password" id="i-claudekey" placeholder="sk-ant-api03-..." style="font-size:13px;letter-spacing:1px">
+      <label>🤖 Clave API de Google Gemini (para leer facturas con IA — gratuito)</label>
+      <input type="password" id="i-claudekey" placeholder="AIza..." style="font-size:13px;letter-spacing:1px">
     </div>
     <div class="mbt">
       <button class="btn" onclick="closeModal()">Cancelar</button>
@@ -1008,6 +1008,7 @@ async function saveMovimiento(){
 
 // ─── IA FACTURA ──────────────────────────────────────────────────────────────
 let _iaLines=[];
+function getGeminiKey(){return localStorage.getItem('shi_gemini_key')||'';}
 function openIA(){
   document.getElementById('iaov').style.display='flex';
   document.getElementById('ia-img').value='';
@@ -1018,20 +1019,20 @@ function openIA(){
   document.getElementById('ia-anabtn').disabled=false;
   _iaLines=[];
   const isHTTPS=location.protocol==='https:';
-  const hasKey=!!getClaudeKey();
+  const hasKey=!!getGeminiKey();
   if(!isHTTPS){
     document.getElementById('ia-status').innerHTML='❌ <strong>Abre la app desde HTTPS:</strong> <a href="https://jf231008.github.io/planning-shirake/" target="_blank" style="color:var(--pri);font-weight:600">jf231008.github.io/planning-shirake</a>';
     document.getElementById('ia-anabtn').disabled=true;
   } else if(!hasKey){
-    document.getElementById('ia-status').innerHTML='❌ <strong>Falta la clave API.</strong> Ve a ⚙️ Ajustes y guarda tu clave de Claude.';
+    document.getElementById('ia-status').innerHTML='❌ <strong>Falta la clave Gemini.</strong> Ve a ⚙️ Ajustes y guarda tu clave de Google AI.';
     document.getElementById('ia-anabtn').disabled=true;
   } else {
     document.getElementById('ia-status').innerHTML='✅ Listo. Adjunta la factura y pulsa Analizar.';
   }
 }
 async function analizarFactura(){
-  const CLAUDE_KEY=getClaudeKey();
-  if(!CLAUDE_KEY){alert('Introduce la clave de API de Claude en ⚙️ Ajustes primero');return;}
+  const GEMINI_KEY=getGeminiKey();
+  if(!GEMINI_KEY){alert('Introduce la clave de Gemini en ⚙️ Ajustes primero');return;}
   const file=document.getElementById('ia-img').files[0];
   if(!file){alert('Selecciona un archivo (PDF, foto o captura)');return;}
   document.getElementById('ia-status').textContent='🔍 Analizando con IA...';
@@ -1050,27 +1051,24 @@ Reglas:
 Productos que tenemos en stock (intenta hacer coincidir el nombre exacto si es posible): ${productosConocidos}
 Si el nombre no coincide, usa el nombre tal como aparece en la factura.`;
   const b64=await new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result.split(',')[1]);r.readAsDataURL(file);});
-  const isPDF=file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf');
-  const fileBlock=isPDF
-    ?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}
-    :{type:'image',source:{type:'base64',media_type:file.type,data:b64}};
-  const content=[{type:'text',text:prompt},fileBlock];
+  const mimeType=file.type||'image/jpeg';
+  const parts=[{text:prompt},{inline_data:{mime_type:mimeType,data:b64}}];
   try{
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+    const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,{
       method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1024,messages:[{role:'user',content}]})
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({contents:[{parts}]})
     });
     const data=await resp.json();
     if(!resp.ok)throw new Error(data.error?.message||'Error '+resp.status);
-    const raw=(data.content[0].text||'').trim();
+    const raw=(data.candidates?.[0]?.content?.parts?.[0]?.text||'').trim();
     const match=raw.match(/\[[\s\S]*\]/);
     if(!match)throw new Error('La IA no devolvió un JSON válido');
     _iaLines=JSON.parse(match[0]);
     renderIAResult();
   }catch(e){
     if(e.message==='Failed to fetch')
-      document.getElementById('ia-status').innerHTML='❌ No se pudo conectar con la API. Comprueba tu conexión a internet y que no hay un bloqueador de anuncios activo.';
+      document.getElementById('ia-status').innerHTML='❌ No se pudo conectar. Comprueba tu conexión a internet.';
     else
       document.getElementById('ia-status').textContent='❌ Error: '+e.message;
   }
@@ -1251,14 +1249,14 @@ function delContactoEdit(){if(_editConId)delContacto(_editConId);}
 // ─── SETTINGS ────────────────────────────────────────────────────────────────
 function openSettings(){
   document.getElementById('i-waphone').value=getWAPhone();
-  document.getElementById('i-claudekey').value=getClaudeKey();
+  document.getElementById('i-claudekey').value=getGeminiKey();
   document.getElementById('setov').style.display='flex';
 }
 function saveSettings(){
   const val=(document.getElementById('i-waphone').value||'').trim().replace(/\D/g,'');
   if(val)localStorage.setItem('shi_wa_phone',val);else localStorage.removeItem('shi_wa_phone');
   const ck=(document.getElementById('i-claudekey').value||'').trim();
-  if(ck)localStorage.setItem('shi_claude_key',ck);else localStorage.removeItem('shi_claude_key');
+  if(ck)localStorage.setItem('shi_gemini_key',ck);else localStorage.removeItem('shi_gemini_key');
   closeModal();alert('✅ Ajustes guardados');
 }
 
