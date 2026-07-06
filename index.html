@@ -1017,11 +1017,16 @@ function openIA(){
   document.getElementById('ia-apply').style.display='none';
   document.getElementById('ia-anabtn').disabled=false;
   _iaLines=[];
-  if(location.protocol==='file:'){
-    document.getElementById('ia-status').innerHTML='⚠️ Esta función requiere conexión HTTPS. Abre la app en: <a href="https://jf231008.github.io/planning-shirake/" target="_blank" style="color:var(--pri);font-weight:600">jf231008.github.io/planning-shirake</a>';
+  const isHTTPS=location.protocol==='https:';
+  const hasKey=!!getClaudeKey();
+  if(!isHTTPS){
+    document.getElementById('ia-status').innerHTML='❌ <strong>Abre la app desde HTTPS:</strong> <a href="https://jf231008.github.io/planning-shirake/" target="_blank" style="color:var(--pri);font-weight:600">jf231008.github.io/planning-shirake</a>';
+    document.getElementById('ia-anabtn').disabled=true;
+  } else if(!hasKey){
+    document.getElementById('ia-status').innerHTML='❌ <strong>Falta la clave API.</strong> Ve a ⚙️ Ajustes y guarda tu clave de Claude.';
     document.getElementById('ia-anabtn').disabled=true;
   } else {
-    document.getElementById('ia-status').textContent='';
+    document.getElementById('ia-status').innerHTML='✅ Listo. Adjunta la factura y pulsa Analizar.';
   }
 }
 async function analizarFactura(){
@@ -1054,7 +1059,7 @@ Si el nombre no coincide, usa el nombre tal como aparece en la factura.`;
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':CLAUDE_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1024,messages:[{role:'user',content}]})
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1024,messages:[{role:'user',content}]})
     });
     const data=await resp.json();
     if(!resp.ok)throw new Error(data.error?.message||'Error '+resp.status);
@@ -1064,7 +1069,10 @@ Si el nombre no coincide, usa el nombre tal como aparece en la factura.`;
     _iaLines=JSON.parse(match[0]);
     renderIAResult();
   }catch(e){
-    document.getElementById('ia-status').textContent='❌ Error: '+e.message;
+    if(e.message==='Failed to fetch')
+      document.getElementById('ia-status').innerHTML='❌ No se pudo conectar con la API. Comprueba tu conexión a internet y que no hay un bloqueador de anuncios activo.';
+    else
+      document.getElementById('ia-status').textContent='❌ Error: '+e.message;
   }
   document.getElementById('ia-anabtn').disabled=false;
 }
