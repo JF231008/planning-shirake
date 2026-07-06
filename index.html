@@ -1082,7 +1082,7 @@ Si el nombre no coincide, usa el nombre tal como aparece en la factura.`;
     const resp=await fetch('https://openrouter.ai/api/v1/chat/completions',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+GEMINI_KEY,'HTTP-Referer':'https://jf231008.github.io/planning-shirake/','X-Title':'Mushbit Planning'},
-      body:JSON.stringify({model:'meta-llama/llama-4-scout:free',messages,max_tokens:1024})
+      body:JSON.stringify({model:'qwen/qwen2.5-vl-7b-instruct:free',messages,max_tokens:1024})
     });
     const data=await resp.json();
     if(!resp.ok)throw new Error(data.error?.message||'Error '+resp.status);
