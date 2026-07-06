@@ -443,14 +443,14 @@ tr:hover td{background:var(--bg2)}
 <div id="iaov" class="ov" style="display:none" onclick="if(event.target===this)closeModal()">
   <div class="modal" style="max-width:600px">
     <div class="modal-title"><span>📄 Leer factura con IA</span><button class="btn sm" onclick="closeModal()">✕</button></div>
-    <div style="margin-bottom:12px">
-      <label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:6px">Opción 1 — Pega el texto del PDF</label>
-      <textarea id="ia-txt" style="width:100%;height:110px;font-size:0.85rem;border:1px solid #d8c8b8;border-radius:8px;padding:8px;box-sizing:border-box;resize:vertical" placeholder="Copia y pega aquí el texto de la factura..."></textarea>
-    </div>
+    <label id="ia-drop" for="ia-img" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;border:2px dashed #c8b0e8;border-radius:12px;padding:28px 16px;background:#f9f6ff;cursor:pointer;margin-bottom:14px;text-align:center">
+      <span style="font-size:2rem">📎</span>
+      <span style="font-weight:600;color:#6a3080">Adjunta la factura</span>
+      <span style="font-size:0.82rem;color:#888">PDF, foto o captura de pantalla<br>Toca aquí para seleccionar o arrastra el archivo</span>
+      <span id="ia-fname" style="font-size:0.82rem;color:#6a3080;font-weight:600"></span>
+    </label>
+    <input type="file" id="ia-img" accept="image/*,.pdf,application/pdf" style="display:none" onchange="document.getElementById('ia-fname').textContent=this.files[0]?'✅ '+this.files[0].name:''">
     <div style="margin-bottom:14px">
-      <label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:6px">Opción 2 — Sube una foto o imagen</label>
-      <input type="file" id="ia-img" accept="image/*">
-    </div>
     <div id="ia-status" style="font-size:0.9rem;min-height:22px;color:var(--pri);margin-bottom:6px"></div>
     <div id="ia-result" style="display:none;overflow-x:auto;margin-bottom:10px"></div>
     <div class="mbt">
@@ -1010,8 +1010,8 @@ async function saveMovimiento(){
 let _iaLines=[];
 function openIA(){
   document.getElementById('iaov').style.display='flex';
-  document.getElementById('ia-txt').value='';
   document.getElementById('ia-img').value='';
+  document.getElementById('ia-fname').textContent='';
   document.getElementById('ia-result').style.display='none';
   document.getElementById('ia-result').innerHTML='';
   document.getElementById('ia-apply').style.display='none';
@@ -1022,9 +1022,8 @@ function openIA(){
 async function analizarFactura(){
   const CLAUDE_KEY=getClaudeKey();
   if(!CLAUDE_KEY){alert('Introduce la clave de API de Claude en ⚙️ Ajustes primero');return;}
-  const txt=document.getElementById('ia-txt').value.trim();
-  const imgFile=document.getElementById('ia-img').files[0];
-  if(!txt&&!imgFile){alert('Pega el texto de la factura o sube una imagen');return;}
+  const file=document.getElementById('ia-img').files[0];
+  if(!file){alert('Selecciona un archivo (PDF, foto o captura)');return;}
   document.getElementById('ia-status').textContent='🔍 Analizando con IA...';
   document.getElementById('ia-anabtn').disabled=true;
   document.getElementById('ia-result').style.display='none';
@@ -1040,13 +1039,12 @@ Reglas:
 - "caducidad": fecha de caducidad en formato YYYY-MM-DD si aparece, si no ""
 Productos que tenemos en stock (intenta hacer coincidir el nombre exacto si es posible): ${productosConocidos}
 Si el nombre no coincide, usa el nombre tal como aparece en la factura.`;
-  let content;
-  if(imgFile){
-    const b64=await new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result.split(',')[1]);r.readAsDataURL(imgFile);});
-    content=[{type:'text',text:prompt},{type:'image',source:{type:'base64',media_type:imgFile.type,data:b64}}];
-  } else {
-    content=prompt+'\n\nFACTURA:\n'+txt;
-  }
+  const b64=await new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result.split(',')[1]);r.readAsDataURL(file);});
+  const isPDF=file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf');
+  const fileBlock=isPDF
+    ?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}
+    :{type:'image',source:{type:'base64',media_type:file.type,data:b64}};
+  const content=[{type:'text',text:prompt},fileBlock];
   try{
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
