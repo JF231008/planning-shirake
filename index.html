@@ -261,6 +261,8 @@ tr:hover td{background:var(--bg2)}
         <option value="salida">📤 Salidas</option>
       </select>
       <button class="btn" onclick="sincronizarStockPendiente()" style="background:#e8f4fc;border-color:#90c8e8;color:#1565c0">🔄 Sincronizar stock</button>
+      <button class="btn" id="hsel-btn" onclick="toggleHistorialSeleccion()" style="background:#fef5e4;border-color:#f0d090;color:#7a4a10">☑️ Seleccionar</button>
+      <button class="btn danger" id="hdel-btn" onclick="eliminarSeleccionados()" style="display:none">🗑 Eliminar seleccionados (<span id="hsel-cnt">0</span>)</button>
       <button class="btn" onclick="limpiarMovimientos()" style="background:#fce8e8;border-color:#f09595;color:#a32d2d;font-size:12px">🗑 Limpiar incorrectos</button>
     </div>
     <div id="hlist"></div>
@@ -1211,6 +1213,24 @@ async function sincronizarStockPendiente(){
 }
 
 // ─── HISTORIAL ───────────────────────────────────────────────────────────────
+let _hSelMode=false;
+
+function toggleHistorialSeleccion(){
+  _hSelMode=!_hSelMode;
+  const btn=document.getElementById('hsel-btn');
+  const delBtn=document.getElementById('hdel-btn');
+  if(btn) btn.textContent=_hSelMode?'✕ Cancelar':'☑️ Seleccionar';
+  if(delBtn) delBtn.style.display='none';
+  document.getElementById('hsel-cnt').textContent='0';
+  rHistorial();
+}
+
+function _actualizarContadorSel(){
+  const cnt=document.querySelectorAll('.hchk:checked').length;
+  document.getElementById('hsel-cnt').textContent=cnt;
+  document.getElementById('hdel-btn').style.display=cnt>0?'':'none';
+}
+
 function rHistorial(){
   const q=(document.getElementById('sh')?.value||'').toLowerCase();
   const ft=document.getElementById('fh')?.value||'';
@@ -1226,14 +1246,17 @@ function rHistorial(){
   });
   const el=document.getElementById('hlist');
   if(!rows.length){el.innerHTML='<div class="empty">Sin movimientos de stock</div>';return;}
-  el.innerHTML=`<table>
+  const chkCol=_hSelMode?`<th style="width:32px"><input type="checkbox" id="hchk-all" onchange="document.querySelectorAll('.hchk').forEach(c=>c.checked=this.checked);_actualizarContadorSel()"></th>`:'';
+  el.innerHTML=`<div class="tw"><table>
     <thead><tr>
-      <th>Fecha</th><th>Tipo</th><th>Producto</th><th>Cajas</th><th>Ref / Nota</th>
+      ${chkCol}<th>Fecha</th><th>Tipo</th><th>Producto</th><th>Cajas</th><th>Ref / Nota</th>
     </tr></thead>
     <tbody>${rows.map(m=>{
       const s=DB.stock.find(x=>x.id===m.stock_id);
       const isEnt=m.tipo==='entrada';
+      const chkCell=_hSelMode?`<td><input type="checkbox" class="hchk" data-id="${m.id}" onchange="_actualizarContadorSel()"></td>`:'';
       return `<tr>
+        ${chkCell}
         <td>${fd(m.fecha)||'—'}</td>
         <td><span style="font-weight:600;color:${isEnt?'#2e7d32':'#b71c1c'}">${isEnt?'📥 Entrada':'📤 Salida'}</span></td>
         <td>${s?.producto||'—'}</td>
@@ -1241,7 +1264,19 @@ function rHistorial(){
         <td style="color:#888;font-size:12px">${[m.ref,m.notas].filter(Boolean).join(' · ')||'—'}</td>
       </tr>`;
     }).join('')}</tbody>
-  </table>`;
+  </table></div>`;
+}
+
+async function eliminarSeleccionados(){
+  const ids=[...document.querySelectorAll('.hchk:checked')].map(c=>parseInt(c.dataset.id));
+  if(!ids.length)return;
+  if(!confirm(`¿Eliminar ${ids.length} movimiento${ids.length!==1?'s':''}?`))return;
+  showLoading('Eliminando...');
+  for(const id of ids) await sbDelete('movimientos_shirake',id);
+  DB.movimientos=DB.movimientos.filter(m=>!ids.includes(m.id));
+  hideLoading();
+  _actualizarContadorSel();
+  rHistorial();
 }
 
 async function limpiarMovimientos(){
