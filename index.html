@@ -184,6 +184,7 @@ tr:hover td{background:var(--bg2)}
       <button class="nav-btn on" onclick="showPage('pedidos')" id="nb-pedidos">📋 Pedidos</button>
       <button class="nav-btn" onclick="showPage('stock')" id="nb-stock">📦 Stock</button>
       <button class="nav-btn" onclick="showPage('alertas')" id="nb-alertas">🔔 Alertas <span class="cnt" id="acnt" style="display:none"></span></button>
+      <button class="nav-btn" onclick="showPage('historial')" id="nb-historial">📜 Historial</button>
       <button class="nav-btn" onclick="showPage('contactos')" id="nb-contactos">👥 Contactos</button>
     </div>
   </div>
@@ -249,6 +250,19 @@ tr:hover td{background:var(--bg2)}
     <div id="acontent" style="max-width:700px"></div>
   </div>
 
+  <!-- ─── HISTORIAL ─── -->
+  <div id="page-historial" class="page">
+    <div class="toolbar">
+      <input type="search" id="sh" placeholder="🔍 Buscar producto..." oninput="rHistorial()">
+      <select id="fh" onchange="rHistorial()">
+        <option value="">Todas las operaciones</option>
+        <option value="entrada">📥 Entradas</option>
+        <option value="salida">📤 Salidas</option>
+      </select>
+    </div>
+    <div id="hlist"></div>
+  </div>
+
   <!-- ─── CONTACTOS ─── -->
   <div id="page-contactos" class="page">
     <div class="toolbar">
@@ -271,6 +285,7 @@ tr:hover td{background:var(--bg2)}
     <button class="bnav-btn on" onclick="showPage('pedidos')" id="bn-pedidos"><span class="bico">📋</span><span class="blbl">Pedidos</span></button>
     <button class="bnav-btn" onclick="showPage('stock')" id="bn-stock"><span class="bico">📦</span><span class="blbl">Stock</span></button>
     <button class="bnav-btn" onclick="showPage('alertas')" id="bn-alertas"><span class="bico">🔔</span><span class="blbl">Alertas</span></button>
+    <button class="bnav-btn" onclick="showPage('historial')" id="bn-historial"><span class="bico">📜</span><span class="blbl">Historial</span></button>
     <button class="bnav-btn" onclick="showPage('contactos')" id="bn-contactos"><span class="bico">👥</span><span class="blbl">Contactos</span></button>
   </div>
 </div>
@@ -532,6 +547,7 @@ function showPage(n){
   document.querySelectorAll('.bnav-btn').forEach(b=>b.classList.remove('on'));
   document.getElementById('bn-'+n).classList.add('on');
   if(n==='alertas')rAlertas();
+  if(n==='historial')rHistorial();
 }
 
 // ─── PROCESO (5 pasos) ────────────────────────────────────────────────────────
@@ -1157,6 +1173,40 @@ async function aplicarFactura(){
   document.getElementById('ia-status').textContent=aplicados>0?`✅ ${aplicados} producto${aplicados!==1?'s':''} actualizado${aplicados!==1?'s':''}. Stock al día.`:'⚠️ No se aplicó ningún cambio (sin coincidencias en stock)';
   document.getElementById('ia-apply').style.display='none';
   rStock();rAlertas();updateAlertBadge();
+}
+
+// ─── HISTORIAL ───────────────────────────────────────────────────────────────
+function rHistorial(){
+  const q=(document.getElementById('sh')?.value||'').toLowerCase();
+  const ft=document.getElementById('fh')?.value||'';
+  const rows=[...DB.movimientos].sort((a,b)=>{
+    const da=a.fecha||'';const db=b.fecha||'';
+    return da<db?1:da>db?-1:b.id-a.id;
+  }).filter(m=>{
+    const s=DB.stock.find(x=>x.id===m.stock_id);
+    const prod=(s?.producto||'').toLowerCase();
+    if(q&&!prod.includes(q))return false;
+    if(ft&&m.tipo!==ft)return false;
+    return true;
+  });
+  const el=document.getElementById('hlist');
+  if(!rows.length){el.innerHTML='<div class="empty">Sin movimientos de stock</div>';return;}
+  el.innerHTML=`<table>
+    <thead><tr>
+      <th>Fecha</th><th>Tipo</th><th>Producto</th><th>Cajas</th><th>Ref / Nota</th>
+    </tr></thead>
+    <tbody>${rows.map(m=>{
+      const s=DB.stock.find(x=>x.id===m.stock_id);
+      const isEnt=m.tipo==='entrada';
+      return `<tr>
+        <td>${fd(m.fecha)||'—'}</td>
+        <td><span style="font-weight:600;color:${isEnt?'#2e7d32':'#b71c1c'}">${isEnt?'📥 Entrada':'📤 Salida'}</span></td>
+        <td>${s?.producto||'—'}</td>
+        <td style="text-align:center;font-weight:700;color:${isEnt?'#2e7d32':'#b71c1c'}">${isEnt?'+':'−'}${m.cajas}</td>
+        <td style="color:#888;font-size:12px">${[m.ref,m.notas].filter(Boolean).join(' · ')||'—'}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
 }
 
 // ─── ALERTAS ─────────────────────────────────────────────────────────────────
