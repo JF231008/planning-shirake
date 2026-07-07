@@ -440,7 +440,7 @@ tr:hover td{background:var(--bg2)}
 
 <!-- Settings -->
 <div id="setov" class="ov" style="display:none" onclick="if(event.target===this)closeModal()">
-  <div class="modal" style="max-width:420px">
+  <div class="modal" style="max-width:440px">
     <div class="modal-title">⚙️ Ajustes<button class="btn sm" onclick="closeModal()">✕</button></div>
     <div class="fl" style="margin-bottom:12px">
       <label>📱 Número WhatsApp fijo (sin + ni espacios)</label>
@@ -450,8 +450,21 @@ tr:hover td{background:var(--bg2)}
       📌 <strong>Formato:</strong> código de país + número sin espacios ni «+».<br>España → <strong>34</strong> seguido del número (ej: <strong>34612345678</strong>)
     </div>
     <div class="fl" style="margin-bottom:12px">
+      <label>🔒 PIN de edición de stock (opcional)</label>
+      <input type="password" id="i-editpin" placeholder="Deja vacío para sin restricción" style="font-size:15px;letter-spacing:2px">
+      <span style="font-size:11px;color:var(--txt2);margin-top:3px">Si se establece, se pedirá al editar o añadir movimientos de stock.</span>
+    </div>
+    <div class="fl" style="margin-bottom:12px">
       <label>🤖 Clave API Groq — <a href="https://console.groq.com/keys" target="_blank" style="color:var(--pri)">console.groq.com/keys</a> (gratis, sin tarjeta)</label>
       <input type="password" id="i-claudekey" placeholder="gsk_..." style="font-size:13px;letter-spacing:1px">
+    </div>
+    <div style="background:#f0edf8;border:1px solid #c8b0e8;border-radius:8px;padding:10px 12px;margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:#6a3080;margin-bottom:6px">🗄️ Migración Supabase — Lote / Referencia / Caducidad</div>
+      <div style="font-size:11px;color:#555;margin-bottom:8px">Para que estos campos se guarden en la nube y sincronicen entre dispositivos, ejecuta este SQL en <strong>Supabase → SQL Editor</strong>:</div>
+      <code id="sql-migration" style="display:block;background:#fff;border:1px solid #ddd;border-radius:6px;padding:8px;font-size:10px;color:#333;word-break:break-all;line-height:1.5">ALTER TABLE stock_shirake ADD COLUMN IF NOT EXISTS lote text DEFAULT '';
+ALTER TABLE stock_shirake ADD COLUMN IF NOT EXISTS referencia text DEFAULT '';
+ALTER TABLE stock_shirake ADD COLUMN IF NOT EXISTS caducidad text DEFAULT '';</code>
+      <button class="btn sm" onclick="copiarSQL()" style="margin-top:6px;width:100%;justify-content:center">📋 Copiar SQL</button>
     </div>
     <div class="mbt">
       <button class="btn" onclick="closeModal()">Cancelar</button>
@@ -517,7 +530,7 @@ function _saveLocalExtra(pedidoId,obj){const ext={};_extraFields.forEach(f=>{if(
 function _loadLocalExtra(pedidoId){try{return JSON.parse(localStorage.getItem('ped_ext_'+pedidoId)||'{}');}catch{return{};}}
 function _mergeExtra(pedidos){return pedidos.map(p=>{const ext=_loadLocalExtra(p.id);return Object.keys(ext).length?{...p,...ext}:p;});}
 const _stkExtraFields=['lote','referencia','caducidad'];
-function _saveStkExtra(stkId,obj){const ext={};_stkExtraFields.forEach(f=>{if(obj[f]!=null&&obj[f]!=='')ext[f]=obj[f];});if(Object.keys(ext).length)localStorage.setItem('stk_ext_'+stkId,JSON.stringify(ext));}
+function _saveStkExtra(stkId,obj){const ext={};_stkExtraFields.forEach(f=>{ext[f]=obj[f]??'';});localStorage.setItem('stk_ext_'+stkId,JSON.stringify(ext));}
 function _loadStkExtra(stkId){try{return JSON.parse(localStorage.getItem('stk_ext_'+stkId)||'{}');}catch{return{};}}
 function _mergeStkExtra(stocks){return stocks.map(s=>{const ext=_loadStkExtra(s.id);return Object.keys(ext).length?{...s,...ext}:s;});}
 async function sbDelete(t,id){try{await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`,{method:'DELETE',headers:{...SB_HDR,'Prefer':''}});}catch{}}
@@ -930,6 +943,18 @@ function sendWA(id){
   window.open((phone?`https://wa.me/${phone}?text=`:`https://wa.me/?text=`)+encodeURIComponent(partes.join('\n')),'_blank');
 }
 
+// ─── PIN DE EDICIÓN ──────────────────────────────────────────────────────────
+let _sessionUnlocked=false;
+function getEditPin(){return localStorage.getItem('shi_edit_pin')||'';}
+function requireEditPin(callback){
+  const pin=getEditPin();
+  if(!pin||_sessionUnlocked){callback();return;}
+  const entered=prompt('🔒 PIN de edición:');
+  if(entered===null)return;
+  if(entered===pin){_sessionUnlocked=true;callback();}
+  else alert('❌ PIN incorrecto');
+}
+
 // ─── STK SAFE (strip extra fields si Supabase las rechaza) ──────────────────
 async function _stkSafe(isEdit,eid,o){
   const fn=isEdit?()=>sbUpdate('stock_shirake',eid,o):()=>sbInsert('stock_shirake',o);
@@ -973,6 +998,9 @@ function rStock(){
 
 let _editStkId=null;
 function openStock(id){
+  requireEditPin(()=>_openStock(id));
+}
+function _openStock(id){
   _editStkId=id||null;
   document.getElementById('stkov').style.display='flex';
   const s=id?DB.stock.find(x=>x.id===id):null;
@@ -1013,6 +1041,9 @@ function delStockEdit(){if(_editStkId)delStock(_editStkId);}
 
 let _movStkId=null,_movTipo=null;
 function openMovimiento(stockId,tipo){
+  requireEditPin(()=>_openMovimiento(stockId,tipo));
+}
+function _openMovimiento(stockId,tipo){
   _movStkId=stockId;_movTipo=tipo;
   const s=DB.stock.find(x=>x.id===stockId);
   document.getElementById('movov').style.display='flex';
@@ -1408,6 +1439,7 @@ function delContactoEdit(){if(_editConId)delContacto(_editConId);}
 function openSettings(){
   document.getElementById('i-waphone').value=getWAPhone();
   document.getElementById('i-claudekey').value=getGeminiKey();
+  document.getElementById('i-editpin').value=getEditPin();
   document.getElementById('setov').style.display='flex';
 }
 function saveSettings(){
@@ -1415,7 +1447,14 @@ function saveSettings(){
   if(val)localStorage.setItem('shi_wa_phone',val);else localStorage.removeItem('shi_wa_phone');
   const ck=(document.getElementById('i-claudekey').value||'').trim();
   if(ck)localStorage.setItem('shi_gemini_key',ck);else localStorage.removeItem('shi_gemini_key');
+  const pin=(document.getElementById('i-editpin').value||'').trim();
+  if(pin)localStorage.setItem('shi_edit_pin',pin);else localStorage.removeItem('shi_edit_pin');
+  _sessionUnlocked=false; // resetear sesión al cambiar el PIN
   closeModal();alert('✅ Ajustes guardados');
+}
+function copiarSQL(){
+  const sql=document.getElementById('sql-migration').textContent;
+  navigator.clipboard.writeText(sql).then(()=>alert('✅ SQL copiado. Pégalo en Supabase → SQL Editor y ejecútalo.')).catch(()=>alert('Copia manualmente el texto del recuadro'));
 }
 
 // ─── REFRESCO DE DATOS ───────────────────────────────────────────────────────
