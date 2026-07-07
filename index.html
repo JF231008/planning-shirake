@@ -259,6 +259,7 @@ tr:hover td{background:var(--bg2)}
         <option value="entrada">📥 Entradas</option>
         <option value="salida">📤 Salidas</option>
       </select>
+      <button class="btn" onclick="limpiarMovimientos()" style="background:#fce8e8;border-color:#f09595;color:#a32d2d;font-size:12px">🗑 Limpiar incorrectos</button>
     </div>
     <div id="hlist"></div>
   </div>
@@ -1217,6 +1218,18 @@ function rHistorial(){
       </tr>`;
     }).join('')}</tbody>
   </table>`;
+}
+
+async function limpiarMovimientos(){
+  const incorrectos=DB.movimientos.filter(m=>m.ref==='Pedido');
+  if(!incorrectos.length){alert('No hay movimientos incorrectos que limpiar.');return;}
+  if(!confirm(`Se eliminarán ${incorrectos.length} movimiento${incorrectos.length!==1?'s':''} generados automáticamente con referencia genérica "Pedido". ¿Continuar?`))return;
+  showLoading('Limpiando historial...');
+  for(const m of incorrectos) await sbDelete('movimientos_shirake',m.id);
+  DB.movimientos=DB.movimientos.filter(m=>m.ref!=='Pedido');
+  hideLoading();
+  rHistorial();
+  alert(`✅ ${incorrectos.length} movimiento${incorrectos.length!==1?'s':''} eliminado${incorrectos.length!==1?'s':''}.`);
 }
 
 // ─── ALERTAS ─────────────────────────────────────────────────────────────────
