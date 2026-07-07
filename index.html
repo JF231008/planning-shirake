@@ -190,6 +190,7 @@ tr:hover td{background:var(--bg2)}
   </div>
   <div style="display:flex;align-items:center;gap:12px">
     <div style="font-size:12px;color:var(--txt2)" id="topdate"></div>
+    <button class="btn sm" id="refresh-btn" onclick="refreshData(true)" title="Actualizar datos">🔄</button>
     <button class="btn sm" onclick="openSettings()">⚙️ Ajustes</button>
   </div>
 </div>
@@ -1417,6 +1418,31 @@ function saveSettings(){
   closeModal();alert('✅ Ajustes guardados');
 }
 
+// ─── REFRESCO DE DATOS ───────────────────────────────────────────────────────
+let _lastRefresh=0;
+async function refreshData(manual=false){
+  const now=Date.now();
+  // Evitar refresco si fue hace menos de 30s (salvo manual)
+  if(!manual&&now-_lastRefresh<30000)return;
+  _lastRefresh=now;
+  const btn=document.getElementById('refresh-btn');
+  if(btn){btn.textContent='⏳';btn.disabled=true;}
+  const[ped,stk,mov]=await Promise.all([
+    sbGet('pedidos_shirake'),
+    sbGet('stock_shirake'),
+    sbGet('movimientos_shirake')
+  ]);
+  if(ped){DB.pedidos=_mergeExtra(ped);if(ped.length)DB.nid.p=Math.max(...ped.map(x=>x.id))+1;}
+  if(stk&&stk.length){DB.stock=_mergeStkExtra(stk);DB.nid.s=Math.max(...stk.map(x=>x.id))+1;}
+  if(mov&&mov.length){DB.movimientos=mov;DB.nid.m=Math.max(...mov.map(x=>x.id))+1;}
+  rPedidos();rStock();rAlertas();updateAlertBadge();
+  if(document.getElementById('page-historial')?.classList.contains('on'))rHistorial();
+  if(btn){btn.textContent='🔄';btn.disabled=false;}
+}
+
+// Refresco automático cada 2 minutos
+setInterval(()=>refreshData(),2*60*1000);
+
 // ─── NOTIFICACIÓN PESTAÑA ────────────────────────────────────────────────────
 const _baseTitle="Planning Mushbit's";
 let _tabInt=null;
@@ -1426,7 +1452,9 @@ document.addEventListener('visibilitychange',()=>{
     if(cnt>0){let tog=true;_tabInt=setInterval(()=>{document.title=tog?`🔔 ${cnt} alerta${cnt>1?'s':''} · Mushbit's`:_baseTitle;tog=!tog;},1500);}
   } else {
     if(_tabInt){clearInterval(_tabInt);_tabInt=null;}
-    document.title=_baseTitle;updateAlertBadge();
+    document.title=_baseTitle;
+    // Al volver a la pestaña, refrescar si lleva más de 1 minuto fuera
+    refreshData();
   }
 });
 
