@@ -641,7 +641,7 @@ function lineasTotalImporte(p){
 }
 
 // ─── AJUSTE STOCK AUTOMÁTICO ─────────────────────────────────────────────────
-async function adjustStock(lineas,op){
+async function adjustStock(lineas,op,cliente=''){
   for(const l of lineas){
     if(!l.producto||!l.cajas||l.extra) continue;
     const s=DB.stock.find(x=>x.producto===l.producto);
@@ -649,17 +649,18 @@ async function adjustStock(lineas,op){
     const delta=parseInt(l.cajas)||0;
     if(!delta) continue;
     const newCajas=op==='sumar'?s.cajas+delta:Math.max(0,s.cajas-delta);
-    // Excluir campos extra (lote/referencia/caducidad) que Supabase aún no tiene
     const{lote,referencia,caducidad,...sBase}=s;
     const updated={...sBase,cajas:newCajas};
     await sbUpdate('stock_shirake',s.id,updated);
     const i=DB.stock.findIndex(x=>x.id===s.id);
     if(i>=0)DB.stock[i]={...s,cajas:newCajas};
-    // Registrar movimiento en historial
-    const mov={id:DB.nid.m,stock_id:s.id,tipo:op==='restar'?'salida':'entrada',cajas:delta,fecha:today(),ref:'Pedido',notas:l.producto};
-    const mr=await sbInsert('movimientos_shirake',mov);
-    if(mr&&mr.id)mov.id=mr.id;
-    DB.movimientos.push(mov);DB.nid.m=Math.max(DB.nid.m,mov.id+1);
+    // Solo registrar salidas reales de pedidos, nunca las correcciones internas
+    if(op==='restar'){
+      const mov={id:DB.nid.m,stock_id:s.id,tipo:'salida',cajas:delta,fecha:today(),ref:cliente||'Pedido',notas:l.producto};
+      const mr=await sbInsert('movimientos_shirake',mov);
+      if(mr&&mr.id)mov.id=mr.id;
+      DB.movimientos.push(mov);DB.nid.m=Math.max(DB.nid.m,mov.id+1);
+    }
   }
 }
 
@@ -841,12 +842,12 @@ async function savePedido(){
   if(_editPedId){
     const anterior=DB.pedidos.find(x=>x.id===_editPedId);
     if(anterior) await adjustStock(getLineas(anterior),'sumar');
-    await adjustStock(lineasList,'restar');
+    await adjustStock(lineasList,'restar',obj.cliente);
     await _sbSafe(true,_editPedId,obj);
     const i=DB.pedidos.findIndex(x=>x.id===_editPedId);
     if(i>=0)DB.pedidos[i]=obj;
   } else {
-    await adjustStock(lineasList,'restar');
+    await adjustStock(lineasList,'restar',obj.cliente);
     const res=await _sbSafe(false,null,obj);
     if(res&&res.id)obj.id=res.id;
     DB.pedidos.push(obj);
