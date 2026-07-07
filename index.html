@@ -853,6 +853,7 @@ async function savePedido(){
     DB.nid.p=Math.max(DB.nid.p,obj.id+1);
   }
   hideLoading();closeModal();rPedidos();rStock();rAlertas();updateAlertBadge();
+  sendWA(obj.id);
 }
 
 async function delPedido(id){
