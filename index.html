@@ -603,7 +603,7 @@ function addLinea(){_addLineaRow({producto:'',cajas:'',tarifa:''});}
 function addLineaExtra(){_addLineaExtraRow({producto:'',cajas:'',tarifa:''});}
 
 function _addLineaRow(l){
-  const prods=DB.stock.map(s=>`<option value="${s.producto}"${s.producto===l.producto?' selected':''}>${s.producto}</option>`).join('');
+  const prods=DB.stock.map(s=>`<option value="${s.producto}"${s.producto===l.producto?' selected':''}>${s.producto}${s.lote?' · Lote: '+s.lote:''}${s.caducidad?' · Cad: '+fd(s.caducidad):''}</option>`).join('');
   const tr=document.createElement('tr');
   tr.innerHTML=`
     <td><select data-f="prod" style="width:100%" onchange="calcImporte()"><option value="">— Seleccionar —</option>${prods}</select></td>
