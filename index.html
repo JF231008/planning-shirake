@@ -240,6 +240,7 @@ tr:hover td{background:var(--bg2)}
     <div class="toolbar">
       <input type="search" id="ss" placeholder="🔍 Buscar producto..." oninput="rStock()">
       <button class="btn" onclick="openIA()" style="background:#f0edf8;border-color:#c8b0e8;color:#6a3080">📄 Leer factura IA</button>
+      <button class="btn" onclick="sincronizarStockPendiente()" style="background:#e8f4fc;border-color:#90c8e8;color:#1565c0">🔄 Sincronizar stock</button>
       <button class="btn p" onclick="openStock()">+ Nuevo producto</button>
     </div>
     <div id="sgrid" class="stock-grid"></div>
@@ -259,6 +260,7 @@ tr:hover td{background:var(--bg2)}
         <option value="entrada">📥 Entradas</option>
         <option value="salida">📤 Salidas</option>
       </select>
+      <button class="btn" onclick="sincronizarStockPendiente()" style="background:#e8f4fc;border-color:#90c8e8;color:#1565c0">🔄 Sincronizar stock</button>
       <button class="btn" onclick="limpiarMovimientos()" style="background:#fce8e8;border-color:#f09595;color:#a32d2d;font-size:12px">🗑 Limpiar incorrectos</button>
     </div>
     <div id="hlist"></div>
@@ -925,6 +927,21 @@ function sendWA(id){
   window.open((phone?`https://wa.me/${phone}?text=`:`https://wa.me/?text=`)+encodeURIComponent(partes.join('\n')),'_blank');
 }
 
+// ─── STK SAFE (strip extra fields si Supabase las rechaza) ──────────────────
+async function _stkSafe(isEdit,eid,o){
+  const fn=isEdit?()=>sbUpdate('stock_shirake',eid,o):()=>sbInsert('stock_shirake',o);
+  let r=await fn();
+  if(r&&r.__error__){
+    if(r.__msg__&&_stkExtraFields.some(f=>r.__msg__.includes(f))){
+      const{lote,referencia,caducidad,...oSin}=o;
+      r=isEdit?await sbUpdate('stock_shirake',eid,oSin):await sbInsert('stock_shirake',oSin);
+      const savedId=isEdit?eid:(r&&r.id?r.id:null);
+      if(savedId) _saveStkExtra(savedId,o);
+    } else r=null;
+  }
+  return r;
+}
+
 // ─── STOCK ───────────────────────────────────────────────────────────────────
 function stockLevel(s){if(s.cajas<=0)return 'crit';if(s.cajas<=s.cajas_min)return 'low';return 'ok';}
 const lvlIco={ok:'🟢',low:'🟡',crit:'🔴'};
@@ -971,19 +988,6 @@ async function saveStock(){
   const obj={id:_editStkId||DB.nid.s,producto:document.getElementById('i-sprod').value.trim(),gama:document.getElementById('i-sgama').value.trim(),cajas:parseInt(document.getElementById('i-scajas').value)||0,cajas_min:parseInt(document.getElementById('i-smin').value)||10,lote:document.getElementById('i-slote').value.trim(),referencia:document.getElementById('i-sref').value.trim(),caducidad:document.getElementById('i-scaducidad').value,notas:document.getElementById('i-snotas').value.trim()};
   if(!obj.producto){alert('El nombre del producto es obligatorio');return;}
   showLoading('Guardando...');
-  async function _stkSafe(isEdit,eid,o){
-    const fn=isEdit?()=>sbUpdate('stock_shirake',eid,o):()=>sbInsert('stock_shirake',o);
-    let r=await fn();
-    if(r&&r.__error__){
-      if(r.__msg__&&_stkExtraFields.some(f=>r.__msg__.includes(f))){
-        const{lote,referencia,caducidad,...oSin}=o;
-        r=isEdit?await sbUpdate('stock_shirake',eid,oSin):await sbInsert('stock_shirake',oSin);
-        const savedId=isEdit?eid:(r&&r.id?r.id:null);
-        if(savedId) _saveStkExtra(savedId,o);
-      } else r=null;
-    }
-    return r;
-  }
   if(_editStkId){
     await _stkSafe(true,_editStkId,obj);
     _saveStkExtra(_editStkId,obj);
@@ -1027,9 +1031,9 @@ async function saveMovimiento(){
   if(res&&res.id)mov.id=res.id;
   DB.movimientos.push(mov);DB.nid.m=Math.max(DB.nid.m,mov.id+1);
   const newCajas=_movTipo==='entrada'?s.cajas+cajas:Math.max(0,s.cajas-cajas);
-  const updated={...s,cajas:newCajas};
-  await sbUpdate('stock_shirake',s.id,updated);
-  const i=DB.stock.findIndex(x=>x.id===s.id);if(i>=0)DB.stock[i]=updated;
+  const{lote,referencia,caducidad,...sBase}=s;
+  await sbUpdate('stock_shirake',s.id,{...sBase,cajas:newCajas});
+  const i=DB.stock.findIndex(x=>x.id===s.id);if(i>=0)DB.stock[i]={...s,cajas:newCajas};
   hideLoading();closeModal();rStock();rAlertas();updateAlertBadge();
 }
 
@@ -1184,6 +1188,26 @@ async function aplicarFactura(){
   document.getElementById('ia-status').textContent=aplicados>0?`✅ ${aplicados} producto${aplicados!==1?'s':''} actualizado${aplicados!==1?'s':''}. Stock al día.`:'⚠️ No se aplicó ningún cambio (sin coincidencias en stock)';
   document.getElementById('ia-apply').style.display='none';
   rStock();rAlertas();updateAlertBadge();
+}
+
+// ─── SINCRONIZAR STOCK PENDIENTE ─────────────────────────────────────────────
+async function sincronizarStockPendiente(){
+  // Pedidos que tienen líneas reales pero sin ninguna salida registrada en historial con ese cliente
+  const pendientes=DB.pedidos.filter(p=>{
+    const lineas=getLineas(p).filter(l=>!l.extra&&(parseInt(l.cajas)||0)>0);
+    if(!lineas.length)return false;
+    return!DB.movimientos.some(m=>m.tipo==='salida'&&m.ref===p.cliente);
+  });
+  if(!pendientes.length){alert('✅ Todos los pedidos tienen su stock sincronizado.');return;}
+  const lista=pendientes.map(p=>`  · ${p.cliente} — ${lineasTotalCajas(p)} cajas`).join('\n');
+  if(!confirm(`Se registrarán las salidas de stock para ${pendientes.length} pedido(s):\n\n${lista}\n\n¿Continuar?`))return;
+  showLoading('Sincronizando stock...');
+  for(const p of pendientes){
+    await adjustStock(getLineas(p),'restar',p.cliente);
+  }
+  hideLoading();
+  rStock();rHistorial();rAlertas();updateAlertBadge();
+  alert(`✅ Sincronizados ${pendientes.length} pedido(s). Stock y historial actualizados.`);
 }
 
 // ─── HISTORIAL ───────────────────────────────────────────────────────────────
