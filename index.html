@@ -643,15 +643,23 @@ function lineasTotalImporte(p){
 // ─── AJUSTE STOCK AUTOMÁTICO ─────────────────────────────────────────────────
 async function adjustStock(lineas,op){
   for(const l of lineas){
-    if(!l.producto||!l.cajas) continue;
+    if(!l.producto||!l.cajas||l.extra) continue;
     const s=DB.stock.find(x=>x.producto===l.producto);
     if(!s) continue;
     const delta=parseInt(l.cajas)||0;
+    if(!delta) continue;
     const newCajas=op==='sumar'?s.cajas+delta:Math.max(0,s.cajas-delta);
-    const updated={...s,cajas:newCajas};
+    // Excluir campos extra (lote/referencia/caducidad) que Supabase aún no tiene
+    const{lote,referencia,caducidad,...sBase}=s;
+    const updated={...sBase,cajas:newCajas};
     await sbUpdate('stock_shirake',s.id,updated);
     const i=DB.stock.findIndex(x=>x.id===s.id);
-    if(i>=0)DB.stock[i]=updated;
+    if(i>=0)DB.stock[i]={...s,cajas:newCajas};
+    // Registrar movimiento en historial
+    const mov={id:DB.nid.m,stock_id:s.id,tipo:op==='restar'?'salida':'entrada',cajas:delta,fecha:today(),ref:'Pedido',notas:l.producto};
+    const mr=await sbInsert('movimientos_shirake',mov);
+    if(mr&&mr.id)mov.id=mr.id;
+    DB.movimientos.push(mov);DB.nid.m=Math.max(DB.nid.m,mov.id+1);
   }
 }
 
