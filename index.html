@@ -259,7 +259,10 @@ tr:hover td{background:var(--bg2)}
   <!-- ─── HISTORIAL ─── -->
   <div id="page-historial" class="page">
     <div class="toolbar">
-      <input type="search" id="sh" placeholder="🔍 Buscar producto..." oninput="rHistorial()">
+      <input type="search" id="sh" placeholder="🔍 Buscar..." oninput="rHistorial()">
+      <select id="fp" onchange="rHistorial()">
+        <option value="">Todos los productos</option>
+      </select>
       <select id="fh" onchange="rHistorial()">
         <option value="">Todas las operaciones</option>
         <option value="entrada">📥 Entradas</option>
@@ -1308,14 +1311,28 @@ function _actualizarContadorSel(){
 
 function rHistorial(){
   const q=(document.getElementById('sh')?.value||'').toLowerCase();
+  const fp=document.getElementById('fp');
+  const fpt=fp?.value||'';
   const ft=document.getElementById('fh')?.value||'';
+
+  // Poblar el selector de productos con los que aparecen en historial
+  if(fp){
+    const productoIds=new Set(DB.movimientos.map(m=>m.stock_id));
+    const productosEnHistorial=DB.stock.filter(s=>productoIds.has(s.id)).sort((a,b)=>a.producto.localeCompare(b.producto));
+    const opts=['<option value="">Todos los productos</option>',
+      ...productosEnHistorial.map(s=>`<option value="${s.id}"${fpt==s.id?'selected':''}>${s.producto}</option>`)
+    ].join('');
+    fp.innerHTML=opts;
+  }
+
   const rows=[...DB.movimientos].sort((a,b)=>{
     const da=a.fecha||'';const db=b.fecha||'';
     return da<db?1:da>db?-1:b.id-a.id;
   }).filter(m=>{
     const s=DB.stock.find(x=>x.id===m.stock_id);
     const prod=(s?.producto||'').toLowerCase();
-    if(q&&!prod.includes(q))return false;
+    if(q&&!prod.includes(q)&&!(m.ref||'').toLowerCase().includes(q))return false;
+    if(fpt&&String(m.stock_id)!==String(fpt))return false;
     if(ft&&m.tipo!==ft)return false;
     return true;
   });
