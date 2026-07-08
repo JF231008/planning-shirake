@@ -722,13 +722,18 @@ function rPedidos(){
   const s3=DB.pedidos.filter(p=>getProceso(p).step===3).length;
   const s4=DB.pedidos.filter(p=>getProceso(p).step===4).length;
   const s5=DB.pedidos.filter(p=>getProceso(p).step===5).length;
+  const fmtEur=v=>(v||0).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})+'€';
+  const impPendCobro=DB.pedidos.filter(p=>getProceso(p).step===4).reduce((a,p)=>a+(parseFloat(p.importe)||0),0);
+  const impCobrado=DB.pedidos.filter(p=>getProceso(p).step===5).reduce((a,p)=>a+(parseFloat(p.importe)||0),0);
   document.getElementById('mped').innerHTML=`
     <div class="mc"><div class="mc-l">Total pedidos</div><div class="mc-v" style="color:var(--pri)">${tot}</div></div>
     <div class="mc"><div class="mc-l">📋 Nuevo pedido</div><div class="mc-v" style="color:var(--wn-txt)">${s1}</div></div>
     <div class="mc"><div class="mc-l">⏳ Pend. servir</div><div class="mc-v" style="color:#a05010">${s2}</div></div>
     <div class="mc"><div class="mc-l">📦 Pend. albarán</div><div class="mc-v" style="color:var(--pri)">${s3}</div></div>
     <div class="mc"><div class="mc-l">🧾 Pend. cobro</div><div class="mc-v" style="color:var(--mv-txt)">${s4}</div></div>
-    <div class="mc"><div class="mc-l">✅ Cobrados</div><div class="mc-v" style="color:var(--ok-txt)">${s5}</div></div>`;
+    <div class="mc"><div class="mc-l">💰 Importe pend. cobrar</div><div class="mc-v" style="color:var(--mv-txt);font-size:18px">${fmtEur(impPendCobro)}</div></div>
+    <div class="mc"><div class="mc-l">✅ Cobrados</div><div class="mc-v" style="color:var(--ok-txt)">${s5}</div></div>
+    <div class="mc"><div class="mc-l">💶 Total cobrado</div><div class="mc-v" style="color:var(--ok-txt);font-size:18px">${fmtEur(impCobrado)}</div></div>`;
 
   document.getElementById('ptbody').innerHTML=rows.length?rows.map(p=>{
     const proc=getProceso(p);
