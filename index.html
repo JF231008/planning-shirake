@@ -238,8 +238,12 @@ tr:hover td{background:var(--bg2)}
 
   <!-- ─── STOCK ─── -->
   <div id="page-stock" class="page">
+    <div class="metrics" id="mstock" style="margin-bottom:14px"></div>
     <div class="toolbar">
       <input type="search" id="ss" placeholder="🔍 Buscar producto..." oninput="rStock()">
+      <select id="fs" onchange="rStock()" style="height:34px;padding:0 10px;border-radius:8px;border:1px solid var(--brd);background:var(--sur);font-size:13px">
+        <option value="">Todas las gamas</option>
+      </select>
       <button class="btn" onclick="openIA()" style="background:#f0edf8;border-color:#c8b0e8;color:#6a3080">📄 Leer factura IA</button>
       <button class="btn" onclick="sincronizarStockPendiente()" style="background:#e8f4fc;border-color:#90c8e8;color:#1565c0">🔄 Sincronizar stock</button>
       <button class="btn p" onclick="openStock()">+ Nuevo producto</button>
@@ -978,19 +982,47 @@ const lvlColor={ok:'var(--ok-txt)',low:'var(--wn-txt)',crit:'var(--al-txt)'};
 
 function rStock(){
   const q=(document.getElementById('ss').value||'').toLowerCase();
-  const rows=DB.stock.filter(s=>!q||[s.producto,s.gama].some(v=>(v||'').toLowerCase().includes(q)));
+  const fg=document.getElementById('fs').value;
+
+  // Actualizar opciones del filtro de gama
+  const gamas=[...new Set(DB.stock.map(s=>s.gama||'Sin categoría'))].sort();
+  const fsel=document.getElementById('fs');
+  const valActual=fsel.value;
+  fsel.innerHTML='<option value="">Todas las gamas</option>'+gamas.map(g=>`<option value="${g}"${g===valActual?' selected':''}>${g}</option>`).join('');
+
+  // Métricas por gama
+  const mgrid=document.getElementById('mstock');
+  if(mgrid){
+    const resumen={};
+    DB.stock.forEach(s=>{const g=s.gama||'Sin categoría';resumen[g]=(resumen[g]||0)+s.cajas;});
+    const totalGeneral=DB.stock.reduce((a,s)=>a+s.cajas,0);
+    mgrid.innerHTML=`<div class="mc"><div class="mc-l">Total cajas</div><div class="mc-v" style="color:var(--pri)">${totalGeneral}</div></div>`
+      +Object.entries(resumen).map(([g,c])=>`<div class="mc"><div class="mc-l">${g}</div><div class="mc-v">${c}</div></div>`).join('');
+  }
+
+  const rows=DB.stock.filter(s=>{
+    if(fg&&(s.gama||'Sin categoría')!==fg)return false;
+    if(!q)return true;
+    return[s.producto,s.gama,s.lote,s.referencia].some(v=>(v||'').toLowerCase().includes(q));
+  });
+
   document.getElementById('sgrid').innerHTML=rows.length?rows.map(s=>{
     const lv=stockLevel(s);
+    const cadStr=s.caducidad?fd(s.caducidad):'';
     return `<div class="scard ${lv}">
       <div class="scard-name">${s.producto||'—'}</div>
-      <div class="scard-gama">${s.gama||'Sin categoría'}${s.referencia?' · <span style="font-size:10px;color:#888">Ref: '+s.referencia+'</span>':''}</div>
+      <div class="scard-gama">${s.gama||'Sin categoría'}</div>
       <div class="scard-cajas" style="color:${lvlColor[lv]}">${s.cajas}</div>
       <div class="scard-min">${lvlIco[lv]} ${lvlTxt[lv]} · Mín: ${s.cajas_min} cajas</div>
-      ${(s.lote||s.caducidad)?`<div style="font-size:11px;color:#888;margin-top:2px">${s.lote?'🏷 Lote: <strong>'+s.lote+'</strong>':''}${s.lote&&s.caducidad?' &nbsp;·&nbsp; ':''}${s.caducidad?'📅 Cad: <strong>'+fd(s.caducidad)+'</strong>':''}</div>`:''}
+      <div style="font-size:11px;color:#777;margin-top:6px;line-height:1.8">
+        ${s.lote?`<div>🏷 <strong>Lote:</strong> ${s.lote}</div>`:''}
+        ${s.referencia?`<div>🔖 <strong>Ref:</strong> ${s.referencia}</div>`:''}
+        ${cadStr?`<div>📅 <strong>Cad:</strong> ${cadStr}</div>`:''}
+      </div>
       <div class="scard-actions">
         <button class="btn sm entrada" onclick="openMovimiento(${s.id},'entrada')">+ Entrada</button>
         <button class="btn sm salida" onclick="openMovimiento(${s.id},'salida')">− Salida</button>
-        <button class="btn sm" onclick="openStock(${s.id})">✏️</button>
+        <button class="btn sm" onclick="openStock(${s.id})">✏️ Editar</button>
       </div>
     </div>`;
   }).join(''):`<div class="empty" style="grid-column:1/-1">Sin productos en stock</div>`;
@@ -1020,12 +1052,23 @@ async function saveStock(){
   if(!obj.producto){alert('El nombre del producto es obligatorio');return;}
   showLoading('Guardando...');
   if(_editStkId){
+    const old=DB.stock.find(x=>x.id===_editStkId);
+    const oldCajas=old?old.cajas:0;
     await _stkSafe(true,_editStkId,obj);
     _saveStkExtra(_editStkId,obj);
     const i=DB.stock.findIndex(x=>x.id===_editStkId);if(i>=0)DB.stock[i]=obj;
+    // Si las cajas cambiaron, registrar ajuste manual en historial
+    const delta=obj.cajas-oldCajas;
+    if(delta!==0){
+      const mov={id:DB.nid.m,stock_id:_editStkId,tipo:delta>0?'entrada':'salida',cajas:Math.abs(delta),fecha:today(),ref:'Ajuste manual',notas:obj.producto};
+      const mr=await sbInsert('movimientos_shirake',mov);
+      if(mr&&mr.id)mov.id=mr.id;
+      DB.movimientos.push(mov);DB.nid.m=Math.max(DB.nid.m,mov.id+1);
+    }
   } else {
     const res=await _stkSafe(false,null,obj);
     if(res&&res.id)obj.id=res.id;
+    _saveStkExtra(obj.id,obj);
     DB.stock.push(obj);DB.nid.s=Math.max(DB.nid.s,obj.id+1);
   }
   hideLoading();closeModal();rStock();rAlertas();updateAlertBadge();
