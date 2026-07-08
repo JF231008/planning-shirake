@@ -732,7 +732,6 @@ function rPedidos(){
     <div class="mc"><div class="mc-l">📦 Pend. albarán</div><div class="mc-v" style="color:var(--pri)">${s3}</div></div>
     <div class="mc"><div class="mc-l">🧾 Pend. cobro</div><div class="mc-v" style="color:var(--mv-txt)">${s4}</div></div>
     <div class="mc"><div class="mc-l">💰 Importe pend. cobrar</div><div class="mc-v" style="color:var(--mv-txt);font-size:18px">${fmtEur(impPendCobro)}</div></div>
-    <div class="mc"><div class="mc-l">✅ Cobrados</div><div class="mc-v" style="color:var(--ok-txt)">${s5}</div></div>
     <div class="mc"><div class="mc-l">💶 Total cobrado</div><div class="mc-v" style="color:var(--ok-txt);font-size:18px">${fmtEur(impCobrado)}</div></div>`;
 
   document.getElementById('ptbody').innerHTML=rows.length?rows.map(p=>{
