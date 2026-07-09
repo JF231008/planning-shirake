@@ -285,6 +285,8 @@ tr:hover td{background:var(--bg2)}
         <option value="cliente">🛒 Clientes</option>
         <option value="proveedor">📦 Proveedores</option>
       </select>
+      <span id="ccount" style="font-size:12px;color:var(--txt2);padding:0 4px"></span>
+      <button class="btn" onclick="importarClientesDesdePedidos()" style="background:#e8f4fc;border-color:#90c8e8;color:#1565c0">📥 Importar clientes</button>
       <button class="btn p" onclick="openContacto()">+ Nuevo contacto</button>
     </div>
     <div id="cgrid" class="cards"></div>
@@ -432,6 +434,7 @@ tr:hover td{background:var(--bg2)}
     <div class="fg">
       <div class="fl fgf"><label>Nombre</label><input type="text" id="i-cnombre" placeholder="Nombre o razón social"></div>
       <div class="fl"><label>Tipo</label><select id="i-ctipo"><option value="cliente">🛒 Cliente</option><option value="proveedor">📦 Proveedor</option></select></div>
+      <div class="fl"><label>NIF / CIF</label><input type="text" id="i-cnif" placeholder="B12345678" style="text-transform:uppercase"></div>
       <div class="fl"><label>Teléfono</label><input type="tel" id="i-ctel" placeholder="600 000 000"></div>
       <div class="fl"><label>Email</label><input type="email" id="i-cemail" placeholder="email@ejemplo.com"></div>
       <div class="fl fgf"><label>Dirección</label><input type="text" id="i-cdir" placeholder="Dirección"></div>
@@ -1442,12 +1445,29 @@ async function markCobrado(id){
 function rContactos(){
   const q=(document.getElementById('sc').value||'').toLowerCase();
   const flt=document.getElementById('fc').value;
+  // Contactos guardados
   const rows=DB.contactos.filter(c=>{
-    if(flt&&c.tipo!==flt)return false;
+    if(flt&&flt!=='cliente'&&c.tipo!==flt)return false;
     if(!q)return true;
-    return[c.nombre,c.telefono,c.email].some(v=>(v||'').toLowerCase().includes(q));
+    return[c.nombre,c.telefono,c.email,c.nif,c.direccion].some(v=>(v||'').toLowerCase().includes(q));
   });
-  document.getElementById('cgrid').innerHTML=rows.length?rows.map(c=>{
+  // Clientes de pedidos que aún no son contactos
+  const nombresGuardados=new Set(DB.contactos.map(c=>(c.nombre||'').toLowerCase()));
+  const clientesMap=new Map();
+  DB.pedidos.forEach(p=>{
+    const nom=(p.cliente||'').trim();
+    if(!nom)return;
+    const key=nom.toLowerCase();
+    if(nombresGuardados.has(key))return;
+    if(!clientesMap.has(key)||p.id>clientesMap.get(key).id)clientesMap.set(key,p);
+  });
+  const virtuales=flt&&flt!=='cliente'?[]:Array.from(clientesMap.values()).filter(p=>{
+    if(!q)return true;
+    return[p.cliente,p.dir_entrega,p.nif].some(v=>(v||'').toLowerCase().includes(q));
+  });
+  const ccount=document.getElementById('ccount');
+  if(ccount)ccount.textContent=(rows.length+virtuales.length)+' contacto'+((rows.length+virtuales.length)!==1?'s':'');
+  const htmlGuardados=rows.map(c=>{
     const ini=(c.nombre||'?').substring(0,2).toUpperCase();
     const nped=DB.pedidos.filter(p=>p.cliente===c.nombre).length;
     return `<div class="card">
@@ -1455,6 +1475,7 @@ function rContactos(){
         <div class="avatar ${c.tipo==='cliente'?'av-b':'av-g'}">${ini}</div>
         <div><div class="card-name">${c.nombre}</div><div class="card-sub">${c.tipo==='cliente'?'🛒 Cliente':'📦 Proveedor'} · ${nped} pedido(s)</div></div>
       </div>
+      ${c.nif?`<div class="card-row">🪪 ${c.nif}</div>`:''}
       ${c.telefono?`<div class="card-row">📞 ${c.telefono}</div>`:''}
       ${c.email?`<div class="card-row">✉️ <a href="mailto:${c.email}" style="color:var(--pri)">${c.email}</a></div>`:''}
       ${c.direccion?`<div class="card-row">📍 ${c.direccion}</div>`:''}
@@ -1464,7 +1485,37 @@ function rContactos(){
         <button class="btn sm danger" onclick="delContacto(${c.id})">🗑</button>
       </div>
     </div>`;
-  }).join(''):`<div class="empty">Sin contactos</div>`;
+  });
+  const htmlVirtuales=virtuales.map(p=>{
+    const nom=(p.cliente||'').trim();
+    const ini=nom.substring(0,2).toUpperCase();
+    const nped=DB.pedidos.filter(x=>x.cliente===nom).length;
+    const pdata=encodeURIComponent(JSON.stringify({nombre:nom,nif:p.nif||'',direccion:p.dir_entrega||''}));
+    return `<div class="card" style="border-style:dashed;opacity:0.85">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div class="avatar av-b" style="opacity:0.6">${ini}</div>
+        <div><div class="card-name">${nom}</div><div class="card-sub">🛒 Cliente · ${nped} pedido(s) <span style="color:#b45309;font-size:10px">(no guardado)</span></div></div>
+      </div>
+      ${p.nif?`<div class="card-row">🪪 ${p.nif}</div>`:''}
+      ${p.dir_entrega?`<div class="card-row">📍 ${p.dir_entrega}</div>`:''}
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <button class="btn sm p" onclick="guardarContactoDesdePedido(${JSON.stringify(pdata)})">💾 Guardar contacto</button>
+      </div>
+    </div>`;
+  });
+  const all=[...htmlGuardados,...htmlVirtuales];
+  document.getElementById('cgrid').innerHTML=all.length?all.join(''):`<div class="empty">Sin contactos</div>`;
+}
+async function guardarContactoDesdePedido(pdataEnc){
+  const pd=JSON.parse(decodeURIComponent(pdataEnc));
+  const obj={id:DB.nid.c,nombre:pd.nombre,tipo:'cliente',nif:pd.nif||'',telefono:'',email:'',direccion:pd.direccion||'',notas:''};
+  showLoading('Guardando...');
+  const{nif,...objSin}=obj;
+  let res=await sbInsert('contactos_shirake',obj);
+  if(res&&res.__error__)res=await sbInsert('contactos_shirake',objSin);
+  if(res&&res.id)obj.id=res.id;
+  DB.contactos.push(obj);DB.nid.c=Math.max(DB.nid.c,obj.id+1);
+  hideLoading();rContactos();
 }
 let _editConId=null;
 function openContacto(id){
@@ -1475,13 +1526,14 @@ function openContacto(id){
   document.getElementById('cdelbtn').style.display=c?'':'none';
   document.getElementById('i-cnombre').value=c?c.nombre||'':'';
   document.getElementById('i-ctipo').value=c?c.tipo||'cliente':'cliente';
+  document.getElementById('i-cnif').value=c?c.nif||'':'';
   document.getElementById('i-ctel').value=c?c.telefono||'':'';
   document.getElementById('i-cemail').value=c?c.email||'':'';
   document.getElementById('i-cdir').value=c?c.direccion||'':'';
   document.getElementById('i-cnotas').value=c?c.notas||'':'';
 }
 async function saveContacto(){
-  const obj={id:_editConId||DB.nid.c,nombre:document.getElementById('i-cnombre').value.trim(),tipo:document.getElementById('i-ctipo').value,telefono:document.getElementById('i-ctel').value.trim(),email:document.getElementById('i-cemail').value.trim(),direccion:document.getElementById('i-cdir').value.trim(),notas:document.getElementById('i-cnotas').value.trim()};
+  const obj={id:_editConId||DB.nid.c,nombre:document.getElementById('i-cnombre').value.trim(),tipo:document.getElementById('i-ctipo').value,nif:document.getElementById('i-cnif').value.trim().toUpperCase(),telefono:document.getElementById('i-ctel').value.trim(),email:document.getElementById('i-cemail').value.trim(),direccion:document.getElementById('i-cdir').value.trim(),notas:document.getElementById('i-cnotas').value.trim()};
   if(!obj.nombre){alert('El nombre es obligatorio');return;}
   showLoading('Guardando...');
   if(_editConId){
@@ -1502,6 +1554,32 @@ async function delContacto(id){
   hideLoading();closeModal();rContactos();
 }
 function delContactoEdit(){if(_editConId)delContacto(_editConId);}
+async function importarClientesDesdePedidos(){
+  const nombresExistentes=new Set(DB.contactos.map(c=>(c.nombre||'').toLowerCase()));
+  const clientesUnicos=new Map();
+  DB.pedidos.forEach(p=>{
+    const nom=(p.cliente||'').trim();
+    if(!nom)return;
+    const key=nom.toLowerCase();
+    if(nombresExistentes.has(key))return;
+    if(!clientesUnicos.has(key)||p.id>clientesUnicos.get(key).id)clientesUnicos.set(key,p);
+  });
+  if(!clientesUnicos.size){alert('No hay clientes nuevos para importar. Todos ya están en contactos.');return;}
+  if(!confirm(`Se importarán ${clientesUnicos.size} cliente(s) nuevo(s) de pedidos. ¿Continuar?`))return;
+  showLoading('Importando clientes...');
+  let creados=0;
+  for(const p of clientesUnicos.values()){
+    const obj={id:DB.nid.c,nombre:p.cliente.trim(),tipo:'cliente',nif:p.nif||'',telefono:'',email:'',direccion:p.dir_entrega||'',notas:''};
+    const{nif,...objSin}=obj;
+    let res=await sbInsert('contactos_shirake',obj);
+    if(res&&res.__error__)res=await sbInsert('contactos_shirake',objSin);
+    if(res&&res.id)obj.id=res.id;
+    DB.contactos.push(obj);DB.nid.c=Math.max(DB.nid.c,obj.id+1);
+    creados++;
+  }
+  hideLoading();rContactos();
+  alert(`✅ Se han importado ${creados} contacto(s) desde pedidos.`);
+}
 
 // ─── SETTINGS ────────────────────────────────────────────────────────────────
 function openSettings(){
