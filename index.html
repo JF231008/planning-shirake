@@ -326,6 +326,7 @@ tr:hover td{background:var(--bg2)}
       <div class="fl"><label>Fecha pedido</label><input type="date" id="i-fpedido"></div>
       <div class="fl"><label>Fecha prevista entrega</label><input type="date" id="i-fprev"></div>
       <div class="fl fgf"><label>Cliente / Destino</label><input type="text" id="i-cli" placeholder="Nombre del cliente" list="cli-list"><datalist id="cli-list"></datalist></div>
+      <div class="fl"><label>NIF / CIF cliente</label><input type="text" id="i-nif" placeholder="Ej. B12345678" style="text-transform:uppercase"></div>
       <div class="fl fgf"><label>Dirección de entrega</label><input type="text" id="i-direnv" placeholder="Dirección donde se entregará el pedido"></div>
       <div class="fl"><label>🕐 Horario de recogida prevista</label><input type="time" id="i-hrecogida"></div>
       <div class="fl"><label>🕑 Horario de entrega prevista</label><input type="time" id="i-hentrega"></div>
@@ -532,7 +533,7 @@ async function sbInsert(t,obj){try{const{created_at,...d}=obj;const r=await fetc
 async function sbUpdate(t,id,obj){try{const{id:_,created_at,...d}=obj;const r=await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`,{method:'PATCH',headers:SB_HDR,body:JSON.stringify(d)});if(!r.ok){const err=await r.json().catch(()=>({}));return{__error__:true,__body__:d,__msg__:err.message||''};}const res=await r.json();return Array.isArray(res)?res[0]:res;}catch{return null;}}
 
 // Guarda campos extra en localStorage si Supabase no tiene las columnas aún
-const _extraFields=['hora_recogida','hora_entrega','alm_dias','alm_desde','alm_hasta'];
+const _extraFields=['hora_recogida','hora_entrega','alm_dias','alm_desde','alm_hasta','nif'];
 function _saveLocalExtra(pedidoId,obj){const ext={};_extraFields.forEach(f=>{if(obj[f]!=null&&obj[f]!=='')ext[f]=obj[f];});if(Object.keys(ext).length)localStorage.setItem('ped_ext_'+pedidoId,JSON.stringify(ext));}
 function _loadLocalExtra(pedidoId){try{return JSON.parse(localStorage.getItem('ped_ext_'+pedidoId)||'{}');}catch{return{};}}
 function _mergeExtra(pedidos){return pedidos.map(p=>{const ext=_loadLocalExtra(p.id);return Object.keys(ext).length?{...p,...ext}:p;});}
@@ -812,6 +813,7 @@ function openPedido(id){
   document.getElementById('i-fpedido').value=p?p.fecha_pedido||'':today();
   document.getElementById('i-fprev').value=p?p.fecha_prevista||'':'';
   document.getElementById('i-cli').value=p?p.cliente||'':'';
+  document.getElementById('i-nif').value=p?p.nif||'':'';
   document.getElementById('i-direnv').value=p?p.dir_entrega||'':'';
   document.getElementById('i-hrecogida').value=p?p.hora_recogida||'':'';
   document.getElementById('i-hentrega').value=p?p.hora_entrega||'':'';
@@ -837,6 +839,7 @@ async function savePedido(){
     fecha_pedido:document.getElementById('i-fpedido').value,
     fecha_prevista:document.getElementById('i-fprev').value,
     cliente:document.getElementById('i-cli').value.trim(),
+    nif:document.getElementById('i-nif').value.trim().toUpperCase(),
     dir_entrega:document.getElementById('i-direnv').value.trim(),
     hora_recogida:document.getElementById('i-hrecogida').value,
     hora_entrega:document.getElementById('i-hentrega').value,
@@ -861,7 +864,7 @@ async function savePedido(){
     let r=await fn();
     if(r&&r.__error__){
       if(r.__msg__&&_extraFields.some(f=>r.__msg__.includes(f))){
-        const{hora_recogida,hora_entrega,tarifa,alm_dias,alm_desde,alm_hasta,...oSin}=o;
+        const{hora_recogida,hora_entrega,tarifa,alm_dias,alm_desde,alm_hasta,nif,...oSin}=o;
         r=isEdit?await sbUpdate('pedidos_shirake',eid,oSin):await sbInsert('pedidos_shirake',oSin);
         const savedId=isEdit?eid:(r&&r.id?r.id:null);
         if(savedId) _saveLocalExtra(savedId,o);
@@ -914,6 +917,7 @@ function sendWA(id){
     '',
     `👤 *Cliente:* ${p.cliente||'—'}`,
   ];
+  if(p.nif) partes.push(`🪪 *NIF/CIF:* ${p.nif}`);
   if(p.dir_entrega) partes.push(`📍 *Dirección:* ${p.dir_entrega}`);
   if(p.hora_recogida||p.hora_entrega){
     let h='';
