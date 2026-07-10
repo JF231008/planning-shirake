@@ -1499,7 +1499,7 @@ function rContactos(){
       ${p.nif?`<div class="card-row">🪪 ${p.nif}</div>`:''}
       ${p.dir_entrega?`<div class="card-row">📍 ${p.dir_entrega}</div>`:''}
       <div style="display:flex;gap:6px;margin-top:10px">
-        <button class="btn sm p" onclick="guardarContactoDesdePedido(${JSON.stringify(pdata)})">💾 Guardar contacto</button>
+        <button class="btn sm p" onclick="guardarContactoDesdePedido('${pdata}')">💾 Guardar contacto</button>
       </div>
     </div>`;
   });
@@ -1537,10 +1537,14 @@ async function saveContacto(){
   if(!obj.nombre){alert('El nombre es obligatorio');return;}
   showLoading('Guardando...');
   if(_editConId){
-    await sbUpdate('contactos_shirake',_editConId,obj);
+    const{nif,...objSin}=obj;
+    let ru=await sbUpdate('contactos_shirake',_editConId,obj);
+    if(ru&&ru.__error__)await sbUpdate('contactos_shirake',_editConId,objSin);
     const i=DB.contactos.findIndex(x=>x.id===_editConId);if(i>=0)DB.contactos[i]=obj;
   } else {
-    const res=await sbInsert('contactos_shirake',obj);
+    const{nif,...objSin}=obj;
+    let res=await sbInsert('contactos_shirake',obj);
+    if(res&&res.__error__)res=await sbInsert('contactos_shirake',objSin);
     if(res&&res.id)obj.id=res.id;
     DB.contactos.push(obj);DB.nid.c=Math.max(DB.nid.c,obj.id+1);
   }
