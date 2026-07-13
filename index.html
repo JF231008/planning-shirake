@@ -393,6 +393,7 @@ tr:hover td{background:var(--bg2)}
     <div class="modal-title"><span id="stktitle">Nuevo producto</span><button class="btn sm" onclick="closeModal()">✕</button></div>
     <div class="fg">
       <div class="fl fgf"><label>Nombre del producto</label><input type="text" id="i-sprod" placeholder="Ej: Shiitake Chips Original"></div>
+      <div class="fl"><label>Código de producto</label><input type="text" id="i-scodigo" placeholder="Ej: 24" maxlength="10"></div>
       <div class="fl"><label>Gama / Categoría</label><input type="text" id="i-sgama" placeholder="Ej: Producto acabado"></div>
       <div class="fl"><label>Stock actual (cajas)</label><input type="number" id="i-scajas" min="0" placeholder="0"></div>
       <div class="fl"><label>Mínimo de alerta (cajas)</label><input type="number" id="i-smin" min="0" placeholder="10"></div>
@@ -474,7 +475,8 @@ tr:hover td{background:var(--bg2)}
       <div style="font-size:11px;color:#555;margin-bottom:8px">Para que estos campos se guarden en la nube y sincronicen entre dispositivos, ejecuta este SQL en <strong>Supabase → SQL Editor</strong>:</div>
       <code id="sql-migration" style="display:block;background:#fff;border:1px solid #ddd;border-radius:6px;padding:8px;font-size:10px;color:#333;word-break:break-all;line-height:1.5">ALTER TABLE stock_shirake ADD COLUMN IF NOT EXISTS lote text DEFAULT '';
 ALTER TABLE stock_shirake ADD COLUMN IF NOT EXISTS referencia text DEFAULT '';
-ALTER TABLE stock_shirake ADD COLUMN IF NOT EXISTS caducidad text DEFAULT '';</code>
+ALTER TABLE stock_shirake ADD COLUMN IF NOT EXISTS caducidad text DEFAULT '';
+ALTER TABLE stock_shirake ADD COLUMN IF NOT EXISTS codigo text DEFAULT '';</code>
       <button class="btn sm" onclick="copiarSQL()" style="margin-top:6px;width:100%;justify-content:center">📋 Copiar SQL</button>
     </div>
     <div class="mbt">
@@ -511,18 +513,22 @@ ALTER TABLE stock_shirake ADD COLUMN IF NOT EXISTS caducidad text DEFAULT '';</c
 let DB={
   pedidos:[],
   stock:[
-    {id:1,producto:'Shiitake Chips Original',gama:'Producto acabado',cajas:0,cajas_min:10,notas:''},
-    {id:2,producto:'Shiitake Chips Sal Marina',gama:'Producto acabado',cajas:0,cajas_min:10,notas:''},
-    {id:3,producto:'Shiitake Chips Picante',gama:'Producto acabado',cajas:0,cajas_min:10,notas:''},
-    {id:4,producto:'Caja embalaje 12 unidades',gama:'Embalaje',cajas:0,cajas_min:20,notas:''},
-    {id:5,producto:'Caja embalaje 30 unidades',gama:'Embalaje',cajas:0,cajas_min:20,notas:''},
+    {id:1,producto:'Shiitake Chips Original',gama:'Producto acabado',cajas:0,cajas_min:10,codigo:'24',notas:''},
+    {id:2,producto:'Shiitake Chips Sal Marina',gama:'Producto acabado',cajas:0,cajas_min:10,codigo:'25',notas:''},
+    {id:3,producto:'Shiitake Chips Picante',gama:'Producto acabado',cajas:0,cajas_min:10,codigo:'26',notas:''},
+    {id:4,producto:'Caja embalaje 12 unidades',gama:'Embalaje',cajas:0,cajas_min:20,codigo:'',notas:''},
+    {id:5,producto:'Caja embalaje 30 unidades',gama:'Embalaje',cajas:0,cajas_min:20,codigo:'',notas:''},
+    {id:6,producto:'Muestras',gama:'Promoción',cajas:0,cajas_min:5,codigo:'27',notas:''},
+    {id:7,producto:'Promoción Chips Original',gama:'Promoción',cajas:0,cajas_min:5,codigo:'28',notas:''},
+    {id:8,producto:'Promoción Chips Sal Marina',gama:'Promoción',cajas:0,cajas_min:5,codigo:'29',notas:''},
+    {id:9,producto:'Promoción Chips Picante',gama:'Promoción',cajas:0,cajas_min:5,codigo:'30',notas:''},
   ],
   movimientos:[],
   contactos:[
     {id:1,nombre:'Shiitake',tipo:'proveedor',telefono:'',email:'',direccion:'',notas:'Proveedor de materia prima'},
     {id:2,nombre:'Tarifa',tipo:'proveedor',telefono:'',email:'',direccion:'',notas:'Empaquetado, cajas y accesorios'},
   ],
-  nid:{p:1,s:6,m:1,c:3}
+  nid:{p:1,s:10,m:1,c:3}
 };
 
 // ─── SUPABASE ────────────────────────────────────────────────────────────────
@@ -540,7 +546,7 @@ const _extraFields=['hora_recogida','hora_entrega','alm_dias','alm_desde','alm_h
 function _saveLocalExtra(pedidoId,obj){const ext={};_extraFields.forEach(f=>{if(obj[f]!=null&&obj[f]!=='')ext[f]=obj[f];});if(Object.keys(ext).length)localStorage.setItem('ped_ext_'+pedidoId,JSON.stringify(ext));}
 function _loadLocalExtra(pedidoId){try{return JSON.parse(localStorage.getItem('ped_ext_'+pedidoId)||'{}');}catch{return{};}}
 function _mergeExtra(pedidos){return pedidos.map(p=>{const ext=_loadLocalExtra(p.id);return Object.keys(ext).length?{...p,...ext}:p;});}
-const _stkExtraFields=['lote','referencia','caducidad'];
+const _stkExtraFields=['lote','referencia','caducidad','codigo'];
 function _saveStkExtra(stkId,obj){const ext={};_stkExtraFields.forEach(f=>{ext[f]=obj[f]??'';});localStorage.setItem('stk_ext_'+stkId,JSON.stringify(ext));}
 function _loadStkExtra(stkId){try{return JSON.parse(localStorage.getItem('stk_ext_'+stkId)||'{}');}catch{return{};}}
 function _mergeStkExtra(stocks){return stocks.map(s=>{const ext=_loadStkExtra(s.id);return Object.keys(ext).length?{...s,...ext}:s;});}
@@ -979,7 +985,7 @@ async function _stkSafe(isEdit,eid,o){
   let r=await fn();
   if(r&&r.__error__){
     if(r.__msg__&&_stkExtraFields.some(f=>r.__msg__.includes(f))){
-      const{lote,referencia,caducidad,...oSin}=o;
+      const{lote,referencia,caducidad,codigo,...oSin}=o;
       r=isEdit?await sbUpdate('stock_shirake',eid,oSin):await sbInsert('stock_shirake',oSin);
       const savedId=isEdit?eid:(r&&r.id?r.id:null);
       if(savedId) _saveStkExtra(savedId,o);
@@ -1024,7 +1030,7 @@ function rStock(){
     const lv=stockLevel(s);
     const cadStr=s.caducidad?fd(s.caducidad):'';
     return `<div class="scard ${lv}">
-      <div class="scard-name">${s.producto||'—'}</div>
+      <div class="scard-name">${s.producto||'—'}${s.codigo?` <span style="font-size:11px;background:#6a3080;color:#fff;padding:1px 6px;border-radius:10px;font-weight:600;vertical-align:middle">#${s.codigo}</span>`:''}</div>
       <div class="scard-gama">${s.gama||'Sin categoría'}</div>
       <div class="scard-cajas" style="color:${lvlColor[lv]}">${s.cajas}</div>
       <div class="scard-min">${lvlIco[lv]} ${lvlTxt[lv]} · Mín: ${s.cajas_min} cajas</div>
@@ -1058,11 +1064,12 @@ function _openStock(id){
   document.getElementById('i-smin').value=s?s.cajas_min||10:'10';
   document.getElementById('i-slote').value=s?s.lote||'':'';
   document.getElementById('i-sref').value=s?s.referencia||'':'';
+  document.getElementById('i-scodigo').value=s?s.codigo||'':'';
   document.getElementById('i-scaducidad').value=s?s.caducidad||'':'';
   document.getElementById('i-snotas').value=s?s.notas||'':'';
 }
 async function saveStock(){
-  const obj={id:_editStkId||DB.nid.s,producto:document.getElementById('i-sprod').value.trim(),gama:document.getElementById('i-sgama').value.trim(),cajas:parseInt(document.getElementById('i-scajas').value)||0,cajas_min:parseInt(document.getElementById('i-smin').value)||10,lote:document.getElementById('i-slote').value.trim(),referencia:document.getElementById('i-sref').value.trim(),caducidad:document.getElementById('i-scaducidad').value,notas:document.getElementById('i-snotas').value.trim()};
+  const obj={id:_editStkId||DB.nid.s,producto:document.getElementById('i-sprod').value.trim(),gama:document.getElementById('i-sgama').value.trim(),cajas:parseInt(document.getElementById('i-scajas').value)||0,cajas_min:parseInt(document.getElementById('i-smin').value)||10,lote:document.getElementById('i-slote').value.trim(),referencia:document.getElementById('i-sref').value.trim(),caducidad:document.getElementById('i-scaducidad').value,codigo:document.getElementById('i-scodigo').value.trim(),notas:document.getElementById('i-snotas').value.trim()};
   if(!obj.producto){alert('El nombre del producto es obligatorio');return;}
   showLoading('Guardando...');
   if(_editStkId){
