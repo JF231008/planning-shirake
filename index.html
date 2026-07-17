@@ -383,6 +383,7 @@ tr:hover td{background:var(--bg2)}
       <button class="btn danger" id="delbtn" onclick="delPedidoEdit()" style="display:none">🗑 Eliminar</button>
       <div style="flex:1"></div>
       <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn" onclick="savePedidoYWA()" style="background:#dcfce7;border-color:#16a34a;color:#15803d">💬 Enviar WhatsApp</button>
       <button class="btn p" onclick="savePedido()">💾 Guardar</button>
     </div>
   </div>
@@ -908,7 +909,11 @@ async function savePedido(){
     DB.nid.p=Math.max(DB.nid.p,obj.id+1);
   }
   hideLoading();closeModal();rPedidos();rStock();rAlertas();updateAlertBadge();
-  sendWA(obj.id);
+  return obj.id;
+}
+async function savePedidoYWA(){
+  const id=await savePedido();
+  if(id)sendWA(id);
 }
 
 async function delPedido(id){
