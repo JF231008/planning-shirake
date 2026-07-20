@@ -1031,8 +1031,25 @@ async function savePedido(){
   }
   hideLoading();closeModal();rPedidos();rStock();rAlertas();updateAlertBadge();
   logActividad('pedido',(_editPedId?'Pedido actualizado':'Nuevo pedido')+': '+obj.cliente+(obj.cajas?' · '+obj.cajas+' cajas':''));
+  _autoSyncContacto(obj);
   return obj.id;
 }
+
+async function _autoSyncContacto(pedido){
+  if(!pedido.cliente)return;
+  const c=DB.contactos.find(x=>(x.nombre||'').toLowerCase()===(pedido.cliente||'').toLowerCase());
+  if(!c)return;
+  const updated={...c};
+  let changed=false;
+  if(!c.nif&&pedido.nif){updated.nif=pedido.nif;changed=true;}
+  if(!c.direccion&&pedido.dir_entrega){updated.direccion=pedido.dir_entrega;changed=true;}
+  if(!changed)return;
+  const r=await _contactSafe(true,c.id,updated);
+  if(!r||r.__error__)return;
+  Object.assign(c,updated);
+  if(document.getElementById('page-contactos')?.classList.contains('on'))rContactos();
+}
+
 async function savePedidoYWA(){
   const id=await savePedido();
   if(id)sendWA(id);
@@ -1720,7 +1737,24 @@ async function saveContacto(){
   }
   hideLoading();closeModal();rContactos();
   logActividad('contacto',(_editConId?'Contacto actualizado':'Nuevo contacto')+': '+obj.nombre+(obj.nif?' ('+obj.nif+')':''));
+  _autoSyncPedidosDesdeContacto(obj);
 }
+
+async function _autoSyncPedidosDesdeContacto(contacto){
+  if(!contacto.nombre||(!contacto.nif&&!contacto.direccion))return;
+  const pedidos=DB.pedidos.filter(p=>(p.cliente||'').toLowerCase()===(contacto.nombre||'').toLowerCase());
+  for(const p of pedidos){
+    let changed=false;
+    const updated={...p};
+    if(!p.nif&&contacto.nif){updated.nif=contacto.nif;changed=true;}
+    if(!p.dir_entrega&&contacto.direccion){updated.dir_entrega=contacto.direccion;changed=true;}
+    if(!changed)continue;
+    const r=await sbUpdate('pedidos_shirake',p.id,updated);
+    if(!r||r.__error__)continue;
+    Object.assign(p,updated);
+  }
+}
+
 async function delContacto(id){
   if(!confirm('¿Eliminar este contacto?'))return;
   showLoading('Eliminando...');
