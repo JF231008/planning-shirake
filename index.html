@@ -306,7 +306,7 @@ tr:hover td{background:var(--bg2)}
   <div id="page-historial" class="page">
     <div class="toolbar">
       <input type="search" id="sh" placeholder="🔍 Buscar..." oninput="rHistorial()">
-      <select id="fp" onchange="rHistorial()">
+      <select id="fhp" onchange="rHistorial()">
         <option value="">Todos los productos</option>
       </select>
       <select id="fh" onchange="rHistorial()">
@@ -568,6 +568,7 @@ ALTER TABLE stock_shirake ADD COLUMN IF NOT EXISTS codigo text DEFAULT '';</code
     </div>
   </div>
 </div>
+</div>
 
 <script>
 let DB={
@@ -727,6 +728,7 @@ function _addLineaExtraRow(l){
   tr.style.background='#faf6ff';
   tr.innerHTML=`
     <td><input type="text" data-f="prod-txt" value="${l.producto||''}" placeholder="✏️ Concepto extra (escribe aquí)" style="width:100%;padding:5px 7px;font-size:12px;border:1px dashed #c8b0e8;border-radius:6px;font-family:inherit;outline:none;background:#f8f3ff" oninput="calcImporte()"></td>
+    <td><input type="text" data-f="codigo" value="" readonly style="width:100%;text-align:center;background:#f5f0ff;border:1px solid #e8d0ff;border-radius:4px;color:#ccc;padding:4px 2px;font-size:12px" placeholder="—"></td>
     <td><input type="number" data-f="cajas" value="${l.cajas||''}" min="0" placeholder="0" oninput="calcImporte()"></td>
     <td><input type="number" data-f="tarifa" value="${l.tarifa||''}" min="0" step="0.01" placeholder="0.00" oninput="calcImporte()"></td>
     <td><button type="button" class="del-linea" onclick="this.closest('tr').remove();calcImporte()">✕</button></td>`;
@@ -1015,13 +1017,15 @@ async function savePedido(){
     const anterior=DB.pedidos.find(x=>x.id===_editPedId);
     if(anterior) await adjustStock(getLineas(anterior),'sumar');
     await adjustStock(lineasList,'restar',obj.cliente);
-    await _sbSafe(true,_editPedId,obj);
+    const ru=await _sbSafe(true,_editPedId,obj);
+    if(!ru||ru.__error__){hideLoading();alert('⚠️ Pedido guardado localmente pero no se pudo sincronizar con la nube. Comprueba tu conexión.');return;}
     const i=DB.pedidos.findIndex(x=>x.id===_editPedId);
     if(i>=0)DB.pedidos[i]=obj;
   } else {
     await adjustStock(lineasList,'restar',obj.cliente);
     const res=await _sbSafe(false,null,obj);
-    if(res&&res.id)obj.id=res.id;
+    if(!res||res.__error__){hideLoading();alert('❌ No se pudo guardar el pedido. Comprueba tu conexión e inténtalo de nuevo.');return;}
+    if(res.id)obj.id=res.id;
     DB.pedidos.push(obj);
     DB.nid.p=Math.max(DB.nid.p,obj.id+1);
   }
@@ -1317,10 +1321,9 @@ Reglas:
 Productos que tenemos en stock (intenta hacer coincidir el nombre exacto si es posible): ${productosConocidos}
 Si el nombre no coincide, usa el nombre tal como aparece en la factura.`;
   const isPDF=file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf');
-  let b64,mimeType;
+  let b64;
   if(isPDF){
     b64=await new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result.split(',')[1]);r.readAsDataURL(file);});
-    mimeType='application/pdf';
   } else {
     // Comprimir imagen a máx 1024px para reducir tamaño
     b64=await new Promise(res=>{
@@ -1337,9 +1340,7 @@ Si el nombre no coincide, usa el nombre tal como aparece en la factura.`;
       };
       img.src=url;
     });
-    mimeType='image/jpeg';
   }
-  const parts=[{text:prompt},{inline_data:{mime_type:mimeType,data:b64}}];
   try{
     const messages=[{role:'user',content:[
       {type:'text',text:prompt},
@@ -1466,7 +1467,7 @@ function _actualizarContadorSel(){
 
 function rHistorial(){
   const q=(document.getElementById('sh')?.value||'').toLowerCase();
-  const fp=document.getElementById('fp');
+  const fp=document.getElementById('fhp');
   const fpt=fp?.value||'';
   const ft=document.getElementById('fh')?.value||'';
 
@@ -1591,7 +1592,7 @@ function rContactos(){
   const flt=document.getElementById('fc').value;
   // Contactos guardados
   const rows=DB.contactos.filter(c=>{
-    if(flt&&flt!=='cliente'&&c.tipo!==flt)return false;
+    if(flt&&c.tipo!==flt)return false;
     if(!q)return true;
     return[c.nombre,c.telefono,c.email,c.nif,c.direccion].some(v=>(v||'').toLowerCase().includes(q));
   });
@@ -1670,9 +1671,7 @@ async function sincronizarNIFsDesdePedidos(){
     const dirNueva=c.direccion?c.direccion:(dir||c.direccion||'');
     if(nifNuevo===c.nif&&dirNueva===c.direccion)continue;
     const updated={...c,nif:nifNuevo,direccion:dirNueva};
-    const{nif:nifV,...objSin}=updated;
-    let r=await sbUpdate('contactos_shirake',c.id,updated);
-    if(r&&r.__error__)r=await sbUpdate('contactos_shirake',c.id,objSin);
+    const r=await _contactSafe(true,c.id,updated);
     if(!r||!r.__error__){Object.assign(c,updated);actualizados++;}
   }
   hideLoading();rContactos();
@@ -1694,20 +1693,29 @@ function openContacto(id,prefill){
   document.getElementById('i-cdir').value=c?c.direccion||'':'';
   document.getElementById('i-cnotas').value=c?c.notas||'':'';
 }
+async function _contactSafe(isEdit,eid,o){
+  const fn=x=>isEdit?sbUpdate('contactos_shirake',eid,x):sbInsert('contactos_shirake',x);
+  let r=await fn(o);
+  if(r&&r.__error__){
+    const{persona,...sin1}=o;r=await fn(sin1); // sin persona
+  }
+  if(r&&r.__error__){
+    const{nif,persona,...sin2}=o;r=await fn(sin2); // sin nif ni persona
+  }
+  return r;
+}
 async function saveContacto(){
   const obj={id:_editConId||DB.nid.c,nombre:document.getElementById('i-cnombre').value.trim(),tipo:document.getElementById('i-ctipo').value,persona:document.getElementById('i-cpersona').value.trim(),nif:document.getElementById('i-cnif').value.trim().toUpperCase(),telefono:document.getElementById('i-ctel').value.trim(),email:document.getElementById('i-cemail').value.trim(),direccion:document.getElementById('i-cdir').value.trim(),notas:document.getElementById('i-cnotas').value.trim()};
   if(!obj.nombre){alert('El nombre es obligatorio');return;}
   showLoading('Guardando...');
   if(_editConId){
-    const{nif,persona,...objSin}=obj;
-    let ru=await sbUpdate('contactos_shirake',_editConId,obj);
-    if(ru&&ru.__error__)await sbUpdate('contactos_shirake',_editConId,objSin);
+    const r=await _contactSafe(true,_editConId,obj);
+    if(!r||r.__error__){hideLoading();alert('❌ Error al guardar el contacto. Revisa la conexión e inténtalo de nuevo.');return;}
     const i=DB.contactos.findIndex(x=>x.id===_editConId);if(i>=0)DB.contactos[i]=obj;
   } else {
-    const{nif,persona,...objSin}=obj;
-    let res=await sbInsert('contactos_shirake',obj);
-    if(res&&res.__error__)res=await sbInsert('contactos_shirake',objSin);
-    if(res&&res.id)obj.id=res.id;
+    const r=await _contactSafe(false,null,obj);
+    if(!r||r.__error__){hideLoading();alert('❌ Error al guardar el contacto. Revisa la conexión e inténtalo de nuevo.');return;}
+    if(r.id)obj.id=r.id;
     DB.contactos.push(obj);DB.nid.c=Math.max(DB.nid.c,obj.id+1);
   }
   hideLoading();closeModal();rContactos();
@@ -1736,10 +1744,8 @@ async function importarClientesDesdePedidos(){
   showLoading('Importando clientes...');
   let creados=0;
   for(const p of clientesUnicos.values()){
-    const obj={id:DB.nid.c,nombre:p.cliente.trim(),tipo:'cliente',nif:p.nif||'',telefono:'',email:'',direccion:p.dir_entrega||'',notas:''};
-    const{nif,...objSin}=obj;
-    let res=await sbInsert('contactos_shirake',obj);
-    if(res&&res.__error__)res=await sbInsert('contactos_shirake',objSin);
+    const obj={id:DB.nid.c,nombre:p.cliente.trim(),tipo:'cliente',nif:p.nif||'',persona:'',telefono:'',email:'',direccion:p.dir_entrega||'',notas:''};
+    const res=await _contactSafe(false,null,obj);
     if(res&&res.id)obj.id=res.id;
     DB.contactos.push(obj);DB.nid.c=Math.max(DB.nid.c,obj.id+1);
     creados++;
