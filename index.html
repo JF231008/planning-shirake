@@ -1092,6 +1092,10 @@ function sendWA(id){
     `👤 *Cliente:* ${p.cliente||'—'}`,
   ];
   if(p.nif) partes.push(`🪪 *NIF/CIF:* ${p.nif}`);
+  const _con=DB.contactos.find(c=>(c.nombre||'').toLowerCase()===(p.cliente||'').toLowerCase());
+  if(_con?.persona) partes.push(`👤 *Persona de contacto:* ${_con.persona}`);
+  if(_con?.telefono) partes.push(`📞 *Teléfono:* ${_con.telefono}`);
+  if(_con?.email) partes.push(`✉️ *Email:* ${_con.email}`);
   if(p.dir_entrega) partes.push(`📍 *Dirección:* ${p.dir_entrega}`);
   if(p.hora_recogida||p.hora_entrega){
     let h='';
