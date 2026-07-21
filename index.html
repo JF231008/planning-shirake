@@ -314,11 +314,14 @@ tr:hover td{background:var(--bg2)}
         <option value="entrada">📥 Entradas</option>
         <option value="salida">📤 Salidas</option>
       </select>
+      <input type="date" id="fh-desde" onchange="rHistorial()" title="Desde" style="height:34px;padding:0 8px;border-radius:8px;border:1px solid var(--brd);background:var(--sur);font-size:13px">
+      <input type="date" id="fh-hasta" onchange="rHistorial()" title="Hasta" style="height:34px;padding:0 8px;border-radius:8px;border:1px solid var(--brd);background:var(--sur);font-size:13px">
+      <button class="btn" onclick="document.getElementById('fh-desde').value='';document.getElementById('fh-hasta').value='';rHistorial()" title="Borrar fechas">✕</button>
       <button class="btn" onclick="sincronizarStockPendiente()" style="background:#e8f4fc;border-color:#90c8e8;color:#1565c0">🔄 Sincronizar stock</button>
       <button class="btn" id="hsel-btn" onclick="toggleHistorialSeleccion()" style="background:#fef5e4;border-color:#f0d090;color:#7a4a10">☑️ Seleccionar</button>
       <button class="btn danger" id="hdel-btn" onclick="eliminarSeleccionados()" style="display:none">🗑 Eliminar seleccionados (<span id="hsel-cnt">0</span>)</button>
-      <button class="btn" onclick="limpiarMovimientos()" style="background:#fce8e8;border-color:#f09595;color:#a32d2d;font-size:12px">🗑 Limpiar incorrectos</button>
     </div>
+    <div id="hresumen"></div>
     <div id="hlist"></div>
   </div>
 
@@ -619,7 +622,7 @@ function _mergeExtra(pedidos){return pedidos.map(p=>{const ext=_loadLocalExtra(p
 const _stkExtraFields=['lote','referencia','caducidad','codigo'];
 function _saveStkExtra(stkId,obj){const ext={};_stkExtraFields.forEach(f=>{ext[f]=obj[f]??'';});localStorage.setItem('stk_ext_'+stkId,JSON.stringify(ext));}
 function _loadStkExtra(stkId){try{return JSON.parse(localStorage.getItem('stk_ext_'+stkId)||'{}');}catch{return{};}}
-function _mergeStkExtra(stocks){return stocks.map(s=>{const ext=_loadStkExtra(s.id);return Object.keys(ext).length?{...s,...ext}:s;});}
+function _mergeStkExtra(stocks){return stocks.map(s=>{const ext=_loadStkExtra(s.id);if(!Object.keys(ext).length)return s;const merged={...s};_stkExtraFields.forEach(f=>{if((!s[f]||s[f]==='')&&ext[f])merged[f]=ext[f];});return merged;});}
 async function sbDelete(t,id){try{await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`,{method:'DELETE',headers:{...SB_HDR,'Prefer':''}});}catch{}}
 
 function showLoading(m){let el=document.getElementById('sb-bar');if(!el){el=document.createElement('div');el.id='sb-bar';el.style.cssText='position:fixed;top:52px;left:0;right:0;background:var(--pri);color:#fff;text-align:center;padding:5px;font-size:12px;z-index:999';document.body.appendChild(el);}el.textContent=m;el.style.display='block';}
@@ -762,7 +765,7 @@ function lineasTotalImporte(p){
 }
 
 // ─── AJUSTE STOCK AUTOMÁTICO ─────────────────────────────────────────────────
-async function adjustStock(lineas,op,cliente=''){
+async function adjustStock(lineas,op,cliente='',pedidoId=null){
   for(const l of lineas){
     if(!l.producto||!l.cajas||l.extra) continue;
     const s=DB.stock.find(x=>x.producto===l.producto);
@@ -771,13 +774,13 @@ async function adjustStock(lineas,op,cliente=''){
     if(!delta) continue;
     const newCajas=op==='sumar'?s.cajas+delta:Math.max(0,s.cajas-delta);
     const{lote,referencia,caducidad,...sBase}=s;
-    const updated={...sBase,cajas:newCajas};
-    await sbUpdate('stock_shirake',s.id,updated);
+    await sbUpdate('stock_shirake',s.id,{...sBase,cajas:newCajas});
     const i=DB.stock.findIndex(x=>x.id===s.id);
     if(i>=0)DB.stock[i]={...s,cajas:newCajas};
-    // Solo registrar salidas reales de pedidos, nunca las correcciones internas
     if(op==='restar'){
-      const mov={id:DB.nid.m,stock_id:s.id,tipo:'salida',cajas:delta,fecha:today(),ref:cliente||'Pedido',notas:l.producto};
+      // notas guarda el id del pedido para evitar duplicados al editar
+      const notas=pedidoId?'ped:'+pedidoId+':'+l.producto:l.producto;
+      const mov={id:DB.nid.m,stock_id:s.id,tipo:'salida',cajas:delta,fecha:today(),ref:cliente||'Pedido',notas};
       const mr=await sbInsert('movimientos_shirake',mov);
       if(mr&&mr.id)mov.id=mr.id;
       DB.movimientos.push(mov);DB.nid.m=Math.max(DB.nid.m,mov.id+1);
@@ -1025,19 +1028,25 @@ async function savePedido(){
   }
   if(_editPedId){
     const anterior=DB.pedidos.find(x=>x.id===_editPedId);
+    // Borrar movimientos automáticos anteriores de este pedido
+    const oldMovIds=DB.movimientos.filter(m=>(m.notas||'').startsWith('ped:'+_editPedId+':')).map(m=>m.id);
+    for(const mid of oldMovIds) await sbDelete('movimientos_shirake',mid);
+    if(oldMovIds.length) DB.movimientos=DB.movimientos.filter(m=>!oldMovIds.includes(m.id));
+    // Restaurar stock anterior y descontar nuevo
     if(anterior) await adjustStock(getLineas(anterior),'sumar');
-    await adjustStock(lineasList,'restar',obj.cliente);
+    await adjustStock(lineasList,'restar',obj.cliente,_editPedId);
     const ru=await _sbSafe(true,_editPedId,obj);
     if(!ru||ru.__error__){hideLoading();alert('⚠️ Pedido guardado localmente pero no se pudo sincronizar con la nube. Comprueba tu conexión.');return;}
     const i=DB.pedidos.findIndex(x=>x.id===_editPedId);
     if(i>=0)DB.pedidos[i]=obj;
   } else {
-    await adjustStock(lineasList,'restar',obj.cliente);
+    // Guardar pedido primero para tener el ID antes de crear el movimiento
     const res=await _sbSafe(false,null,obj);
     if(!res||res.__error__){hideLoading();alert('❌ No se pudo guardar el pedido. Comprueba tu conexión e inténtalo de nuevo.');return;}
     if(res.id)obj.id=res.id;
     DB.pedidos.push(obj);
     DB.nid.p=Math.max(DB.nid.p,obj.id+1);
+    await adjustStock(lineasList,'restar',obj.cliente,obj.id);
   }
   hideLoading();closeModal();rPedidos();rStock();rAlertas();updateAlertBadge();
   logActividad('pedido',(_editPedId?'Pedido actualizado':'Nuevo pedido')+': '+obj.cliente+(obj.cajas?' · '+obj.cajas+' cajas':''));
@@ -1459,18 +1468,18 @@ async function aplicarFactura(){
 
 // ─── SINCRONIZAR STOCK PENDIENTE ─────────────────────────────────────────────
 async function sincronizarStockPendiente(){
-  // Pedidos que tienen líneas reales pero sin ninguna salida registrada en historial con ese cliente
+  // Pedidos que tienen líneas pero sin movimiento automático asociado (ped:id:)
   const pendientes=DB.pedidos.filter(p=>{
     const lineas=getLineas(p).filter(l=>!l.extra&&(parseInt(l.cajas)||0)>0);
     if(!lineas.length)return false;
-    return!DB.movimientos.some(m=>m.tipo==='salida'&&m.ref===p.cliente);
+    return!DB.movimientos.some(m=>(m.notas||'').startsWith('ped:'+p.id+':'));
   });
   if(!pendientes.length){alert('✅ Todos los pedidos tienen su stock sincronizado.');return;}
   const lista=pendientes.map(p=>`  · ${p.cliente} — ${lineasTotalCajas(p)} cajas`).join('\n');
   if(!confirm(`Se registrarán las salidas de stock para ${pendientes.length} pedido(s):\n\n${lista}\n\n¿Continuar?`))return;
   showLoading('Sincronizando stock...');
   for(const p of pendientes){
-    await adjustStock(getLineas(p),'restar',p.cliente);
+    await adjustStock(getLineas(p),'restar',p.cliente,p.id);
   }
   hideLoading();
   rStock();rHistorial();rAlertas();updateAlertBadge();
@@ -1501,46 +1510,71 @@ function rHistorial(){
   const fp=document.getElementById('fhp');
   const fpt=fp?.value||'';
   const ft=document.getElementById('fh')?.value||'';
+  const fDesde=document.getElementById('fh-desde')?.value||'';
+  const fHasta=document.getElementById('fh-hasta')?.value||'';
 
-  // Poblar el selector de productos con los que aparecen en historial
+  // Poblar el selector de productos
   if(fp){
     const productoIds=new Set(DB.movimientos.map(m=>m.stock_id));
-    const productosEnHistorial=DB.stock.filter(s=>productoIds.has(s.id)).sort((a,b)=>a.producto.localeCompare(b.producto));
-    const opts=['<option value="">Todos los productos</option>',
-      ...productosEnHistorial.map(s=>`<option value="${s.id}"${fpt==s.id?'selected':''}>${s.producto}</option>`)
-    ].join('');
-    fp.innerHTML=opts;
+    const prods=DB.stock.filter(s=>productoIds.has(s.id)).sort((a,b)=>a.producto.localeCompare(b.producto));
+    fp.innerHTML='<option value="">Todos los productos</option>'+prods.map(s=>`<option value="${s.id}"${fpt==s.id?' selected':''}>${s.producto}</option>`).join('');
   }
 
   const rows=[...DB.movimientos].sort((a,b)=>{
-    const da=a.fecha||'';const db=b.fecha||'';
-    return da<db?1:da>db?-1:b.id-a.id;
+    const da=a.fecha||'',db2=b.fecha||'';
+    return da<db2?1:da>db2?-1:b.id-a.id;
   }).filter(m=>{
     const s=DB.stock.find(x=>x.id===m.stock_id);
     const prod=(s?.producto||'').toLowerCase();
-    if(q&&!prod.includes(q)&&!(m.ref||'').toLowerCase().includes(q))return false;
+    const notasClean=(m.notas||'').replace(/^ped:\d+:/,'');
+    if(q&&!prod.includes(q)&&!(m.ref||'').toLowerCase().includes(q)&&!notasClean.toLowerCase().includes(q))return false;
     if(fpt&&String(m.stock_id)!==String(fpt))return false;
     if(ft&&m.tipo!==ft)return false;
+    if(fDesde&&(m.fecha||'')<fDesde)return false;
+    if(fHasta&&(m.fecha||'')>fHasta)return false;
     return true;
   });
+
+  // Resumen del período filtrado
+  const totalEnt=rows.filter(m=>m.tipo==='entrada').reduce((s,m)=>s+m.cajas,0);
+  const totalSal=rows.filter(m=>m.tipo==='salida').reduce((s,m)=>s+m.cajas,0);
+  const bal=totalEnt-totalSal;
+  document.getElementById('hresumen').innerHTML=rows.length?`
+    <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+      <div style="background:#eef6ea;border:1px solid #b8dba0;border-radius:8px;padding:8px 16px;font-size:13px;color:#2d5a22">
+        📥 <strong>${totalEnt}</strong> cajas entrada
+      </div>
+      <div style="background:#fdf0ee;border:1px solid #f0b0a0;border-radius:8px;padding:8px 16px;font-size:13px;color:#7a2a1e">
+        📤 <strong>${totalSal}</strong> cajas salida
+      </div>
+      <div style="background:${bal>=0?'#eef6ea':'#fdf0ee'};border:1px solid ${bal>=0?'#b8dba0':'#f0b0a0'};border-radius:8px;padding:8px 16px;font-size:13px;color:${bal>=0?'#2d5a22':'#7a2a1e'}">
+        ${bal>=0?'▲':'▼'} Balance: <strong>${bal>=0?'+':''}${bal}</strong> cajas
+      </div>
+      <div style="background:var(--sur);border:1px solid var(--brd);border-radius:8px;padding:8px 16px;font-size:13px;color:var(--txt2)">
+        ${rows.length} movimiento${rows.length!==1?'s':''}
+      </div>
+    </div>`:'';
+
   const el=document.getElementById('hlist');
-  if(!rows.length){el.innerHTML='<div class="empty">Sin movimientos de stock</div>';return;}
+  if(!rows.length){el.innerHTML='<div class="empty">Sin movimientos en este período</div>';return;}
   const chkCol=_hSelMode?`<th style="width:32px"><input type="checkbox" id="hchk-all" onchange="document.querySelectorAll('.hchk').forEach(c=>c.checked=this.checked);_actualizarContadorSel()"></th>`:'';
   el.innerHTML=`<div class="tw"><table>
     <thead><tr>
-      ${chkCol}<th>Fecha</th><th>Tipo</th><th>Producto</th><th>Cajas</th><th>Ref / Nota</th>
+      ${chkCol}<th>Fecha</th><th>Tipo</th><th>Producto</th><th style="text-align:center">Cajas</th><th>Cliente / Referencia</th>
     </tr></thead>
     <tbody>${rows.map(m=>{
       const s=DB.stock.find(x=>x.id===m.stock_id);
       const isEnt=m.tipo==='entrada';
+      const notasClean=(m.notas||'').replace(/^ped:\d+:/,'');
+      const ref=m.ref&&m.ref!=='Pedido'?m.ref:'';
       const chkCell=_hSelMode?`<td><input type="checkbox" class="hchk" data-id="${m.id}" onchange="_actualizarContadorSel()"></td>`:'';
-      return `<tr>
+      return `<tr style="border-left:3px solid ${isEnt?'#4caf50':'#e53935'}">
         ${chkCell}
-        <td>${fd(m.fecha)||'—'}</td>
-        <td><span style="font-weight:600;color:${isEnt?'#2e7d32':'#b71c1c'}">${isEnt?'📥 Entrada':'📤 Salida'}</span></td>
-        <td>${s?.producto||'—'}</td>
-        <td style="text-align:center;font-weight:700;color:${isEnt?'#2e7d32':'#b71c1c'}">${isEnt?'+':'−'}${m.cajas}</td>
-        <td style="color:#888;font-size:12px">${[m.ref,m.notas].filter(Boolean).join(' · ')||'—'}</td>
+        <td style="white-space:nowrap;font-size:12px">${fd(m.fecha)||'—'}</td>
+        <td><span style="font-size:12px;font-weight:700;color:${isEnt?'#2e7d32':'#b71c1c'};background:${isEnt?'#eef6ea':'#fdf0ee'};padding:2px 8px;border-radius:6px">${isEnt?'📥 Entrada':'📤 Salida'}</span></td>
+        <td style="font-weight:500">${s?.producto||'—'}</td>
+        <td style="text-align:center;font-weight:700;font-size:15px;color:${isEnt?'#2e7d32':'#b71c1c'}">${isEnt?'+':'−'}${m.cajas}</td>
+        <td style="color:var(--txt2);font-size:12px">${[ref,notasClean].filter(Boolean).join(' · ')||'—'}</td>
       </tr>`;
     }).join('')}</tbody>
   </table></div>`;
