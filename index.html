@@ -291,7 +291,6 @@ tr:hover td{background:var(--bg2)}
         <option value="">Todas las gamas</option>
       </select>
       <button class="btn" onclick="openIA()" style="background:#f0edf8;border-color:#c8b0e8;color:#6a3080">📄 Leer factura IA</button>
-      <button class="btn" onclick="sincronizarStockPendiente()" style="background:#e8f4fc;border-color:#90c8e8;color:#1565c0">🔄 Sincronizar stock</button>
       <button class="btn p" onclick="openStock()">+ Nuevo producto</button>
     </div>
     <div id="sgrid" class="stock-grid"></div>
@@ -317,7 +316,6 @@ tr:hover td{background:var(--bg2)}
       <input type="date" id="fh-desde" onchange="rHistorial()" title="Desde" style="height:34px;padding:0 8px;border-radius:8px;border:1px solid var(--brd);background:var(--sur);font-size:13px">
       <input type="date" id="fh-hasta" onchange="rHistorial()" title="Hasta" style="height:34px;padding:0 8px;border-radius:8px;border:1px solid var(--brd);background:var(--sur);font-size:13px">
       <button class="btn" onclick="document.getElementById('fh-desde').value='';document.getElementById('fh-hasta').value='';rHistorial()" title="Borrar fechas">✕</button>
-      <button class="btn" onclick="sincronizarStockPendiente()" style="background:#e8f4fc;border-color:#90c8e8;color:#1565c0">🔄 Sincronizar stock</button>
       <button class="btn" id="hsel-btn" onclick="toggleHistorialSeleccion()" style="background:#fef5e4;border-color:#f0d090;color:#7a4a10">☑️ Seleccionar</button>
       <button class="btn danger" id="hdel-btn" onclick="eliminarSeleccionados()" style="display:none">🗑 Eliminar seleccionados (<span id="hsel-cnt">0</span>)</button>
     </div>
@@ -1048,7 +1046,7 @@ async function savePedido(){
     DB.nid.p=Math.max(DB.nid.p,obj.id+1);
     await adjustStock(lineasList,'restar',obj.cliente,obj.id);
   }
-  hideLoading();closeModal();rPedidos();rStock();rAlertas();updateAlertBadge();
+  hideLoading();closeModal();rPedidos();rStock();rAlertas();updateAlertBadge();_autoRefreshHistorial();
   logActividad('pedido',(_editPedId?'Pedido actualizado':'Nuevo pedido')+': '+obj.cliente+(obj.cajas?' · '+obj.cajas+' cajas':''));
   _autoSyncContacto(obj);
   return obj.id;
@@ -1173,6 +1171,10 @@ async function _stkSafe(isEdit,eid,o){
   return r;
 }
 
+function _autoRefreshHistorial(){
+  if(document.getElementById('page-historial')?.classList.contains('on'))rHistorial();
+}
+
 // ─── STOCK ───────────────────────────────────────────────────────────────────
 function stockLevel(s){if(s.cajas<=0)return 'crit';if(s.cajas<=s.cajas_min)return 'low';return 'ok';}
 const lvlIco={ok:'🟢',low:'🟡',crit:'🔴'};
@@ -1271,7 +1273,7 @@ async function saveStock(){
     _saveStkExtra(obj.id,obj);
     DB.stock.push(obj);DB.nid.s=Math.max(DB.nid.s,obj.id+1);
   }
-  hideLoading();closeModal();rStock();rAlertas();updateAlertBadge();
+  hideLoading();closeModal();rStock();rAlertas();updateAlertBadge();_autoRefreshHistorial();
   logActividad('stock',(_editStkId?'Stock actualizado':'Nuevo producto')+': '+obj.producto+(obj.cajas!==undefined?' · '+obj.cajas+' cajas':''));
 }
 async function delStock(id){
@@ -1312,7 +1314,7 @@ async function saveMovimiento(){
   const{lote,referencia,caducidad,...sBase}=s;
   await sbUpdate('stock_shirake',s.id,{...sBase,cajas:newCajas});
   const i=DB.stock.findIndex(x=>x.id===s.id);if(i>=0)DB.stock[i]={...s,cajas:newCajas};
-  hideLoading();closeModal();rStock();rAlertas();updateAlertBadge();
+  hideLoading();closeModal();rStock();rAlertas();updateAlertBadge();_autoRefreshHistorial();
   logActividad('movimiento',(_movTipo==='entrada'?'📥 Entrada':'📤 Salida')+' de '+s.producto+': '+cajas+' cajas'+(mov.ref?' ('+mov.ref+')':''));
 }
 
