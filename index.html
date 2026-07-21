@@ -612,6 +612,7 @@ const SB_HDR={'Content-Type':'application/json','apikey':SB_KEY,'Authorization':
 async function sbGet(t){try{const r=await fetch(`${SB_URL}/rest/v1/${t}?order=id`,{headers:SB_HDR});if(!r.ok)return null;return r.json();}catch{return null;}}
 async function sbInsert(t,obj){try{const{created_at,...d}=obj;const r=await fetch(`${SB_URL}/rest/v1/${t}`,{method:'POST',headers:SB_HDR,body:JSON.stringify(d)});if(!r.ok){const err=await r.json().catch(()=>({}));return{__error__:true,__body__:d,__msg__:err.message||''};}const res=await r.json();return Array.isArray(res)?res[0]:res;}catch{return null;}}
 async function sbUpdate(t,id,obj){try{const{id:_,created_at,...d}=obj;const r=await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`,{method:'PATCH',headers:SB_HDR,body:JSON.stringify(d)});if(!r.ok){const err=await r.json().catch(()=>({}));return{__error__:true,__body__:d,__msg__:err.message||''};}const res=await r.json();return Array.isArray(res)?res[0]:res;}catch{return null;}}
+async function sbGetRow(t,id){try{const r=await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`,{headers:SB_HDR});if(!r.ok)return null;const res=await r.json();return Array.isArray(res)?res[0]??null:res;}catch{return null;}}
 
 // Guarda campos extra en localStorage si Supabase no tiene las columnas aún
 const _extraFields=['hora_recogida','hora_entrega','alm_dias','alm_desde','alm_hasta','nif'];
@@ -764,6 +765,10 @@ function lineasTotalImporte(p){
 
 // ─── AJUSTE STOCK AUTOMÁTICO ─────────────────────────────────────────────────
 async function adjustStock(lineas,op,cliente='',pedidoId=null){
+  // Refrescar stock desde Supabase para evitar lecturas obsoletas en operaciones concurrentes
+  const freshStk=await sbGet('stock_shirake');
+  if(freshStk&&freshStk.length) DB.stock=_mergeStkExtra(freshStk);
+
   for(const l of lineas){
     if(!l.producto||!l.cajas||l.extra) continue;
     const s=DB.stock.find(x=>x.producto===l.producto);
@@ -1229,19 +1234,22 @@ function rStock(){
   }).join(''):`<div class="empty" style="grid-column:1/-1">Sin productos en stock</div>`;
 }
 
-let _editStkId=null;
+let _editStkId=null,_editStkCajasAtOpen=0;
 function openStock(id){
   requireEditPin(()=>_openStock(id));
 }
 function _openStock(id){
   _editStkId=id||null;
+  _editStkCajasAtOpen=0;
   document.getElementById('stkov').style.display='flex';
   const s=id?DB.stock.find(x=>x.id===id):null;
   document.getElementById('stktitle').textContent=s?'Editar producto':'Nuevo producto';
   document.getElementById('sdelbtn').style.display=s?'':'none';
   document.getElementById('i-sprod').value=s?s.producto||'':'';
   document.getElementById('i-sgama').value=s?s.gama||'':'';
-  document.getElementById('i-scajas').value=s?s.cajas||0:'';
+  const cajasVal=s?s.cajas||0:0;
+  document.getElementById('i-scajas').value=cajasVal;
+  _editStkCajasAtOpen=cajasVal;
   document.getElementById('i-smin').value=s?s.cajas_min||10:'10';
   document.getElementById('i-slote').value=s?s.lote||'':'';
   document.getElementById('i-sref').value=s?s.referencia||'':'';
@@ -1254,15 +1262,18 @@ async function saveStock(){
   if(!obj.producto){alert('El nombre del producto es obligatorio');return;}
   showLoading('Guardando...');
   if(_editStkId){
-    const old=DB.stock.find(x=>x.id===_editStkId);
-    const oldCajas=old?old.cajas:0;
+    // Re-fetch para evitar sobrescribir con valor obsoleto del formulario
+    const fresh=await sbGetRow('stock_shirake',_editStkId);
+    const currentCajas=fresh&&fresh.cajas!=null?fresh.cajas:(_editStkCajasAtOpen);
+    // Aplicar el delta que el usuario eligió (si no cambió cajas, delta=0 y se preserva el valor real)
+    const userDelta=obj.cajas-_editStkCajasAtOpen;
+    obj.cajas=Math.max(0,currentCajas+userDelta);
     await _stkSafe(true,_editStkId,obj);
     _saveStkExtra(_editStkId,obj);
     const i=DB.stock.findIndex(x=>x.id===_editStkId);if(i>=0)DB.stock[i]=obj;
     // Si las cajas cambiaron, registrar ajuste manual en historial
-    const delta=obj.cajas-oldCajas;
-    if(delta!==0){
-      const mov={id:DB.nid.m,stock_id:_editStkId,tipo:delta>0?'entrada':'salida',cajas:Math.abs(delta),fecha:today(),ref:'Ajuste manual',notas:obj.producto};
+    if(userDelta!==0){
+      const mov={id:DB.nid.m,stock_id:_editStkId,tipo:userDelta>0?'entrada':'salida',cajas:Math.abs(userDelta),fecha:today(),ref:'Ajuste manual',notas:obj.producto};
       const mr=await sbInsert('movimientos_shirake',mov);
       if(mr&&mr.id)mov.id=mr.id;
       DB.movimientos.push(mov);DB.nid.m=Math.max(DB.nid.m,mov.id+1);
@@ -1310,7 +1321,10 @@ async function saveMovimiento(){
   const res=await sbInsert('movimientos_shirake',mov);
   if(res&&res.id)mov.id=res.id;
   DB.movimientos.push(mov);DB.nid.m=Math.max(DB.nid.m,mov.id+1);
-  const newCajas=_movTipo==='entrada'?s.cajas+cajas:Math.max(0,s.cajas-cajas);
+  // Re-fetch fila actual para evitar sobrescribir cambios de otro usuario
+  const freshRow=await sbGetRow('stock_shirake',s.id);
+  const currentCajas=freshRow&&freshRow.cajas!=null?freshRow.cajas:s.cajas;
+  const newCajas=_movTipo==='entrada'?currentCajas+cajas:Math.max(0,currentCajas-cajas);
   const{lote,referencia,caducidad,...sBase}=s;
   await sbUpdate('stock_shirake',s.id,{...sBase,cajas:newCajas});
   const i=DB.stock.findIndex(x=>x.id===s.id);if(i>=0)DB.stock[i]={...s,cajas:newCajas};
