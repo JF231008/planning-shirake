@@ -1740,11 +1740,11 @@ async function saveContacto(){
   showLoading('Guardando...');
   if(_editConId){
     const r=await _contactSafe(true,_editConId,obj);
-    if(!r||r.__error__){hideLoading();alert('❌ Error al guardar el contacto. Revisa la conexión e inténtalo de nuevo.');return;}
+    if(!r||r.__error__){hideLoading();alert('❌ Error al guardar el contacto:\n'+(r?.__msg__||'Sin detalles. Revisa la conexión.'));return;}
     const i=DB.contactos.findIndex(x=>x.id===_editConId);if(i>=0)DB.contactos[i]=obj;
   } else {
     const r=await _contactSafe(false,null,obj);
-    if(!r||r.__error__){hideLoading();alert('❌ Error al guardar el contacto. Revisa la conexión e inténtalo de nuevo.');return;}
+    if(!r||r.__error__){hideLoading();alert('❌ Error al guardar el contacto:\n'+(r?.__msg__||'Sin detalles. Revisa la conexión.'));return;}
     if(r.id)obj.id=r.id;
     DB.contactos.push(obj);DB.nid.c=Math.max(DB.nid.c,obj.id+1);
   }
