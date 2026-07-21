@@ -1961,15 +1961,17 @@ async function refreshData(manual=false){
   _lastRefresh=now;
   const btn=document.getElementById('refresh-btn');
   if(btn){btn.textContent='⏳';btn.disabled=true;}
-  const[ped,stk,mov]=await Promise.all([
+  const[ped,stk,mov,con]=await Promise.all([
     sbGet('pedidos_shirake'),
     sbGet('stock_shirake'),
-    sbGet('movimientos_shirake')
+    sbGet('movimientos_shirake'),
+    sbGet('contactos_shirake')
   ]);
   if(ped){DB.pedidos=_mergeExtra(ped);if(ped.length)DB.nid.p=Math.max(...ped.map(x=>x.id))+1;}
   if(stk&&stk.length){DB.stock=_mergeStkExtra(stk);DB.nid.s=Math.max(...stk.map(x=>x.id))+1;}
   if(mov&&mov.length){DB.movimientos=mov;DB.nid.m=Math.max(...mov.map(x=>x.id))+1;}
-  rPedidos();rStock();rAlertas();updateAlertBadge();
+  if(con&&con.length){DB.contactos=con;DB.nid.c=Math.max(...con.map(x=>x.id))+1;}
+  rPedidos();rStock();rAlertas();rContactos();updateAlertBadge();
   if(document.getElementById('page-historial')?.classList.contains('on'))rHistorial();
   if(btn){btn.textContent='🔄';btn.disabled=false;}
 }
