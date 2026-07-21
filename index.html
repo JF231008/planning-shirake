@@ -319,6 +319,7 @@ tr:hover td{background:var(--bg2)}
       <button class="btn" id="hsel-btn" onclick="toggleHistorialSeleccion()" style="background:#fef5e4;border-color:#f0d090;color:#7a4a10">☑️ Seleccionar</button>
       <button class="btn danger" id="hdel-btn" onclick="eliminarSeleccionados()" style="display:none">🗑 Eliminar seleccionados (<span id="hsel-cnt">0</span>)</button>
     </div>
+    <div id="hdup-banner"></div>
     <div id="hresumen"></div>
     <div id="hlist"></div>
   </div>
@@ -635,7 +636,6 @@ async function init(){
   if(ped){DB.pedidos=_mergeExtra(ped);if(ped.length)DB.nid.p=Math.max(...ped.map(x=>x.id))+1;}
   if(stk&&stk.length){DB.stock=_mergeStkExtra(stk);DB.nid.s=Math.max(...stk.map(x=>x.id))+1;}
   if(mov&&mov.length){DB.movimientos=mov;DB.nid.m=Math.max(...mov.map(x=>x.id))+1;}
-  alert('📋 Contactos en Supabase: '+(con===null?'ERROR (null)':Array.isArray(con)?con.length+' contactos → '+con.map(c=>c.nombre).join(', '):'Respuesta inesperada'));
   if(con&&con.length){DB.contactos=con;DB.nid.c=Math.max(...con.map(x=>x.id))+1;}
   hideLoading();
   rPedidos();rStock();rAlertas();rContactos();updateAlertBadge();
@@ -1508,6 +1508,20 @@ function _actualizarContadorSel(){
 }
 
 function rHistorial(){
+  // Banner de duplicados (si existen movimientos antiguos repetidos)
+  const dups=_detectarDuplicados();
+  const bannerEl=document.getElementById('hdup-banner');
+  if(bannerEl){
+    if(dups.length){
+      bannerEl.innerHTML=`<div style="background:#fff8e1;border:1px solid #f9a825;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-size:13px;color:#5d4037">
+        ⚠️ Se detectan <strong>${dups.length} movimiento${dups.length!==1?'s duplicados':' duplicado'}</strong> en el historial.
+        <button class="btn" style="margin-left:auto;background:#f9a825;color:#fff;border:none" onclick="limpiarDuplicados()">🧹 Limpiar duplicados</button>
+      </div>`;
+    } else {
+      bannerEl.innerHTML='';
+    }
+  }
+
   const q=(document.getElementById('sh')?.value||'').toLowerCase();
   const fp=document.getElementById('fhp');
   const fpt=fp?.value||'';
@@ -1604,6 +1618,38 @@ async function limpiarMovimientos(){
   hideLoading();
   rHistorial();
   alert(`✅ ${incorrectos.length} movimiento${incorrectos.length!==1?'s':''} eliminado${incorrectos.length!==1?'s':''}.`);
+}
+
+function _detectarDuplicados(){
+  // Solo miramos movimientos de salida sin prefijo ped: (formato antiguo)
+  const viejos=DB.movimientos.filter(m=>m.tipo==='salida'&&!(m.notas||'').startsWith('ped:'));
+  const grupos={};
+  for(const m of viejos){
+    const k=`${m.stock_id}|${m.fecha||''}|${m.ref||''}|${m.cajas}`;
+    if(!grupos[k])grupos[k]=[];
+    grupos[k].push(m);
+  }
+  const duplicados=[];
+  for(const g of Object.values(grupos)){
+    if(g.length>1){
+      // Ordenar por ID ascendente, marcar todo excepto el primero como duplicado
+      g.sort((a,b)=>a.id-b.id);
+      duplicados.push(...g.slice(1));
+    }
+  }
+  return duplicados;
+}
+
+async function limpiarDuplicados(){
+  const dups=_detectarDuplicados();
+  if(!dups.length){rHistorial();return;}
+  if(!confirm(`Se eliminarán ${dups.length} movimiento${dups.length!==1?'s':''} duplicado${dups.length!==1?'s':''} del historial. El stock no se modifica (ya está correcto). ¿Continuar?`))return;
+  showLoading('Eliminando duplicados...');
+  const ids=dups.map(m=>m.id);
+  for(const id of ids) await sbDelete('movimientos_shirake',id);
+  DB.movimientos=DB.movimientos.filter(m=>!ids.includes(m.id));
+  hideLoading();
+  rHistorial();
 }
 
 // ─── ALERTAS ─────────────────────────────────────────────────────────────────
