@@ -634,6 +634,7 @@ async function init(){
   if(ped){DB.pedidos=_mergeExtra(ped);if(ped.length)DB.nid.p=Math.max(...ped.map(x=>x.id))+1;}
   if(stk&&stk.length){DB.stock=_mergeStkExtra(stk);DB.nid.s=Math.max(...stk.map(x=>x.id))+1;}
   if(mov&&mov.length){DB.movimientos=mov;DB.nid.m=Math.max(...mov.map(x=>x.id))+1;}
+  console.log('[Shirake] contactos de Supabase:',con);
   if(con&&con.length){DB.contactos=con;DB.nid.c=Math.max(...con.map(x=>x.id))+1;}
   hideLoading();
   rPedidos();rStock();rAlertas();rContactos();updateAlertBadge();
