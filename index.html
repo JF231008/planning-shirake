@@ -389,7 +389,13 @@ tr:hover td{background:var(--bg2)}
         </div>
       </div>
       <div class="fl"><label>NIF / CIF / VAT</label><input type="text" id="i-nif" placeholder="B12345678 · FR12345… · DE123…" style="text-transform:uppercase"></div>
-      <div class="fl fgf"><label>Dirección de entrega</label><input type="text" id="i-direnv" placeholder="Dirección donde se entregará el pedido"></div>
+      <div class="fl fgf">
+        <label>Dirección de entrega</label>
+        <div style="display:flex;gap:6px">
+          <input type="text" id="i-direnv" placeholder="Dirección donde se entregará el pedido" style="flex:1">
+          <select id="i-direnv-sel" onchange="if(this.value)document.getElementById('i-direnv').value=this.value" style="display:none;max-width:190px" title="Direcciones guardadas de este cliente"></select>
+        </div>
+      </div>
       <div class="fl"><label>🕐 Horario de recogida prevista</label><input type="time" id="i-hrecogida"></div>
       <div class="fl"><label>🕑 Horario de entrega prevista</label><input type="time" id="i-hentrega"></div>
       <div class="fl fgf" style="flex-basis:100%">
@@ -500,8 +506,17 @@ tr:hover td{background:var(--bg2)}
       <div class="fl"><label>NIF / CIF / VAT</label><input type="text" id="i-cnif" placeholder="B12345678 · FR12345… · DE123…" style="text-transform:uppercase"></div>
       <div class="fl"><label>Teléfono</label><input type="tel" id="i-ctel" placeholder="600 000 000"></div>
       <div class="fl"><label>Email</label><input type="email" id="i-cemail" placeholder="email@ejemplo.com"></div>
-      <div class="fl fgf"><label>Dirección</label><input type="text" id="i-cdir" placeholder="Dirección"></div>
+      <div class="fl fgf"><label>Dirección fiscal</label><input type="text" id="i-cdir" placeholder="Dirección fiscal"></div>
       <div class="fl fgf"><label>Notas</label><textarea id="i-cnotas" placeholder="Observaciones"></textarea></div>
+    </div>
+    <!-- Direcciones de envío adicionales -->
+    <div class="msec">
+      <div class="msec-title">📦 Direcciones de envío adicionales</div>
+      <table class="lineas-tbl">
+        <thead><tr><th style="width:32%">Etiqueta</th><th style="width:56%">Dirección</th><th style="width:12%"></th></tr></thead>
+        <tbody id="direcciones-body"></tbody>
+      </table>
+      <button type="button" class="add-linea" onclick="addDireccion()">+ Añadir dirección de envío</button>
     </div>
     <div class="mbt">
       <button class="btn danger" id="cdelbtn" onclick="delContactoEdit()" style="display:none">🗑 Eliminar</button>
@@ -544,6 +559,7 @@ ALTER TABLE stock_shirake ADD COLUMN IF NOT EXISTS codigo text DEFAULT '';
 ALTER TABLE contactos_shirake ADD COLUMN IF NOT EXISTS nif text DEFAULT '';
 ALTER TABLE contactos_shirake ADD COLUMN IF NOT EXISTS persona text DEFAULT '';
 ALTER TABLE contactos_shirake ADD COLUMN IF NOT EXISTS direccion text DEFAULT '';
+ALTER TABLE contactos_shirake ADD COLUMN IF NOT EXISTS direcciones_envio text DEFAULT '';
 -- Tiempo real (ejecutar una sola vez)
 ALTER PUBLICATION supabase_realtime ADD TABLE pedidos_shirake;
 ALTER PUBLICATION supabase_realtime ADD TABLE stock_shirake;
@@ -623,6 +639,11 @@ const _stkExtraFields=['lote','referencia','caducidad','codigo'];
 function _saveStkExtra(stkId,obj){const ext={};_stkExtraFields.forEach(f=>{ext[f]=obj[f]??'';});localStorage.setItem('stk_ext_'+stkId,JSON.stringify(ext));}
 function _loadStkExtra(stkId){try{return JSON.parse(localStorage.getItem('stk_ext_'+stkId)||'{}');}catch{return{};}}
 function _mergeStkExtra(stocks){return stocks.map(s=>{const ext=_loadStkExtra(s.id);if(!Object.keys(ext).length)return s;const merged={...s};_stkExtraFields.forEach(f=>{if((!s[f]||s[f]==='')&&ext[f])merged[f]=ext[f];});return merged;});}
+// Igual que arriba pero para direcciones de envío adicionales de contactos
+const _conExtraFields=['direcciones_envio'];
+function _saveConExtra(conId,obj){const ext={};_conExtraFields.forEach(f=>{if(obj[f]!=null&&obj[f]!=='')ext[f]=obj[f];});if(Object.keys(ext).length)localStorage.setItem('con_ext_'+conId,JSON.stringify(ext));}
+function _loadConExtra(conId){try{return JSON.parse(localStorage.getItem('con_ext_'+conId)||'{}');}catch{return{};}}
+function _mergeConExtra(contactos){return contactos.map(c=>{const ext=_loadConExtra(c.id);return Object.keys(ext).length?{...c,...ext}:c;});}
 async function sbDelete(t,id){try{await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`,{method:'DELETE',headers:{...SB_HDR,'Prefer':''}});}catch{}}
 
 function showLoading(m){let el=document.getElementById('sb-bar');if(!el){el=document.createElement('div');el.id='sb-bar';el.style.cssText='position:fixed;top:52px;left:0;right:0;background:var(--pri);color:#fff;text-align:center;padding:5px;font-size:12px;z-index:999';document.body.appendChild(el);}el.textContent=m;el.style.display='block';}
@@ -637,7 +658,7 @@ async function init(){
   if(ped){DB.pedidos=_mergeExtra(ped);if(ped.length)DB.nid.p=Math.max(...ped.map(x=>x.id))+1;}
   if(stk&&stk.length){DB.stock=_mergeStkExtra(stk);DB.nid.s=Math.max(...stk.map(x=>x.id))+1;}
   if(mov&&mov.length){DB.movimientos=mov;DB.nid.m=Math.max(...mov.map(x=>x.id))+1;}
-  if(con&&con.length){DB.contactos=con;DB.nid.c=Math.max(...con.map(x=>x.id))+1;}
+  if(con&&con.length){DB.contactos=_mergeConExtra(con);DB.nid.c=Math.max(...con.map(x=>x.id))+1;}
   hideLoading();
   rPedidos();rStock();rAlertas();rContactos();updateAlertBadge();
   initRealtime(); // Conexión tiempo real — todos ven los cambios al instante
@@ -761,6 +782,48 @@ function lineasTotalCajas(p){
 
 function lineasTotalImporte(p){
   return getLineas(p).reduce((s,l)=>s+((parseInt(l.cajas)||0)*(parseFloat(l.tarifa)||0)),0);
+}
+
+// ─── DIRECCIONES DE ENVÍO DE CONTACTOS ───────────────────────────────────────
+function getDirecciones(c){
+  if(!c) return [];
+  if(c.direcciones_envio){try{const d=JSON.parse(c.direcciones_envio);if(Array.isArray(d))return d;}catch{}}
+  return [];
+}
+
+function getDireccionesForm(){
+  return [...document.querySelectorAll('#direcciones-body tr')].map(r=>({
+    etiqueta:(r.querySelector('[data-f="etiqueta"]')||{}).value||'',
+    direccion:(r.querySelector('[data-f="direccion"]')||{}).value||''
+  })).filter(d=>d.direccion.trim());
+}
+
+function renderDirecciones(direcciones){
+  document.getElementById('direcciones-body').innerHTML='';
+  (direcciones||[]).forEach(d=>_addDireccionRow(d));
+}
+
+function addDireccion(){_addDireccionRow({etiqueta:'',direccion:''});}
+
+function _addDireccionRow(d){
+  const tr=document.createElement('tr');
+  tr.innerHTML=`
+    <td><input type="text" data-f="etiqueta" value="${d.etiqueta||''}" placeholder="Ej: Almacén, Tienda..."></td>
+    <td><input type="text" data-f="direccion" value="${d.direccion||''}" placeholder="Dirección de envío"></td>
+    <td><button type="button" class="del-linea" onclick="this.closest('tr').remove()">✕</button></td>`;
+  document.getElementById('direcciones-body').appendChild(tr);
+}
+
+// Rellena el selector de "Dirección de entrega" del pedido con la fiscal + envíos guardados del contacto
+function populateDireccionSelect(c){
+  const sel=document.getElementById('i-direnv-sel');
+  if(!sel)return;
+  const opts=[];
+  if(c&&c.direccion) opts.push({etiqueta:'Fiscal',direccion:c.direccion});
+  (c?getDirecciones(c):[]).forEach(d=>{if(d.direccion) opts.push({etiqueta:d.etiqueta||'Envío',direccion:d.direccion});});
+  if(opts.length<2){sel.style.display='none';sel.innerHTML='';return;}
+  sel.innerHTML='<option value="">📍 Elegir dirección…</option>'+opts.map(o=>`<option value="${o.direccion.replace(/"/g,'&quot;')}">${o.etiqueta}: ${o.direccion.length>28?o.direccion.slice(0,28)+'…':o.direccion}</option>`).join('');
+  sel.style.display='';
 }
 
 // ─── AJUSTE STOCK AUTOMÁTICO ─────────────────────────────────────────────────
@@ -929,6 +992,7 @@ function selectContactoPedido(id){
   document.getElementById('i-cli').value=c.nombre||'';
   document.getElementById('i-nif').value=c.nif||'';
   document.getElementById('i-direnv').value=c.direccion||'';
+  populateDireccionSelect(c);
   document.getElementById('con-picker')?.classList.remove('open');
 }
 document.addEventListener('click',e=>{
@@ -986,6 +1050,8 @@ function openPedido(id){
   document.getElementById('i-cob').value=p?p.cobro||'':'';
   renderLineas(p?getLineas(p):null);
   updateProcTrack(p?getProceso(p).step:1);
+  const relCon=p?DB.contactos.find(x=>(x.nombre||'').toLowerCase()===(p.cliente||'').toLowerCase()):null;
+  populateDireccionSelect(relCon);
 }
 
 async function savePedido(){
@@ -1109,6 +1175,7 @@ function sendWA(id){
   if(_con?.persona) partes.push(`👤 *Persona de contacto:* ${_con.persona}`);
   if(_con?.telefono) partes.push(`📞 *Teléfono:* ${_con.telefono}`);
   if(_con?.email) partes.push(`✉️ *Email:* ${_con.email}`);
+  if(_con?.notas) partes.push(`📝 *Observaciones del cliente:* ${_con.notas}`);
   if(p.dir_entrega) partes.push(`📍 *Dirección:* ${p.dir_entrega}`);
   if(p.hora_recogida||p.hora_entrega){
     let h='';
@@ -1745,6 +1812,7 @@ function rContactos(){
     const nped=peds.length;
     const nifPedido=(peds.find(p=>p.nif)?.nif||'').trim().toUpperCase();
     const nifPendiente=!c.nif&&nifPedido;
+    const dirsEnvio=getDirecciones(c).filter(d=>d.direccion);
     return `<div class="card">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
         <div class="avatar ${c.tipo==='cliente'?'av-b':'av-g'}">${ini}</div>
@@ -1755,6 +1823,7 @@ function rContactos(){
       ${c.telefono?`<div class="card-row">📞 ${c.telefono}</div>`:''}
       ${c.email?`<div class="card-row">✉️ <a href="mailto:${c.email}" style="color:var(--pri)">${c.email}</a></div>`:''}
       ${c.direccion?`<div class="card-row">📍 ${c.direccion}</div>`:''}
+      ${dirsEnvio.map(d=>`<div class="card-row">📦 ${d.etiqueta?`<strong>${d.etiqueta}:</strong> `:''}${d.direccion}</div>`).join('')}
       ${c.notas?`<div class="card-row" style="font-style:italic">${c.notas}</div>`:''}
       <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
         <button class="btn sm" onclick="openContacto(${c.id})">✏️ Editar</button>
@@ -1819,6 +1888,7 @@ function openContacto(id,prefill){
   document.getElementById('i-cemail').value=c?c.email||'':'';
   document.getElementById('i-cdir').value=c?c.direccion||'':'';
   document.getElementById('i-cnotas').value=c?c.notas||'':'';
+  renderDirecciones(id?getDirecciones(c):[]);
 }
 async function _contactSafe(isEdit,eid,o){
   const fn=x=>isEdit?sbUpdate('contactos_shirake',eid,x):sbInsert('contactos_shirake',x);
@@ -1829,10 +1899,17 @@ async function _contactSafe(isEdit,eid,o){
   if(r&&r.__error__){
     const{nif,persona,...sin2}=o;r=await fn(sin2); // sin nif ni persona
   }
+  if(r&&r.__error__){
+    const{direcciones_envio,nif,persona,...sin3}=o;r=await fn(sin3); // sin direcciones_envio, nif ni persona
+    if(r&&!r.__error__){
+      const savedId=isEdit?eid:(r&&r.id?r.id:null);
+      if(savedId)_saveConExtra(savedId,o);
+    }
+  }
   return r;
 }
 async function saveContacto(){
-  const obj={id:_editConId||DB.nid.c,nombre:document.getElementById('i-cnombre').value.trim(),tipo:document.getElementById('i-ctipo').value,persona:document.getElementById('i-cpersona').value.trim(),nif:document.getElementById('i-cnif').value.trim().toUpperCase(),telefono:document.getElementById('i-ctel').value.trim(),email:document.getElementById('i-cemail').value.trim(),direccion:document.getElementById('i-cdir').value.trim(),notas:document.getElementById('i-cnotas').value.trim()};
+  const obj={id:_editConId||DB.nid.c,nombre:document.getElementById('i-cnombre').value.trim(),tipo:document.getElementById('i-ctipo').value,persona:document.getElementById('i-cpersona').value.trim(),nif:document.getElementById('i-cnif').value.trim().toUpperCase(),telefono:document.getElementById('i-ctel').value.trim(),email:document.getElementById('i-cemail').value.trim(),direccion:document.getElementById('i-cdir').value.trim(),notas:document.getElementById('i-cnotas').value.trim(),direcciones_envio:JSON.stringify(getDireccionesForm())};
   if(!obj.nombre){alert('El nombre es obligatorio');return;}
   showLoading('Guardando...');
   if(_editConId){
@@ -2020,8 +2097,8 @@ function _handleRt(d){
     rStock();rAlertas();updateAlertBadge();
   }
   else if(table==='contactos_shirake'){
-    if(ev==='INSERT'){if(!DB.contactos.find(x=>x.id===r?.id)){DB.contactos.push(r);DB.nid.c=Math.max(DB.nid.c,(r.id||0)+1);}}
-    else if(ev==='UPDATE'){const i=DB.contactos.findIndex(x=>x.id===r?.id);if(i>=0)DB.contactos[i]=r;else DB.contactos.push(r);}
+    if(ev==='INSERT'){if(!DB.contactos.find(x=>x.id===r?.id)){DB.contactos.push(_mergeConExtra([r])[0]);DB.nid.c=Math.max(DB.nid.c,(r.id||0)+1);}}
+    else if(ev==='UPDATE'){const i=DB.contactos.findIndex(x=>x.id===r?.id);const m=_mergeConExtra([r])[0];if(i>=0)DB.contactos[i]=m;else DB.contactos.push(m);}
     else if(ev==='DELETE'){DB.contactos=DB.contactos.filter(x=>x.id!==(old?.id));}
     rContactos();
   }
@@ -2067,7 +2144,7 @@ async function refreshData(manual=false){
   if(ped){DB.pedidos=_mergeExtra(ped);if(ped.length)DB.nid.p=Math.max(...ped.map(x=>x.id))+1;}
   if(stk&&stk.length){DB.stock=_mergeStkExtra(stk);DB.nid.s=Math.max(...stk.map(x=>x.id))+1;}
   if(mov&&mov.length){DB.movimientos=mov;DB.nid.m=Math.max(...mov.map(x=>x.id))+1;}
-  if(con&&con.length){DB.contactos=con;DB.nid.c=Math.max(...con.map(x=>x.id))+1;}
+  if(con&&con.length){DB.contactos=_mergeConExtra(con);DB.nid.c=Math.max(...con.map(x=>x.id))+1;}
   rPedidos();rStock();rAlertas();rContactos();updateAlertBadge();
   if(document.getElementById('page-historial')?.classList.contains('on'))rHistorial();
   if(btn){btn.textContent='🔄';btn.disabled=false;}
