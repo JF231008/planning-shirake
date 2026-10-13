@@ -379,7 +379,7 @@ tr:hover td{background:var(--bg2)}
       <div class="fl fgf" style="position:relative">
         <label>Cliente / Destino</label>
         <div style="display:flex;gap:6px">
-          <input type="text" id="i-cli" placeholder="Nombre del cliente" list="cli-list" style="flex:1" oninput="filterConPicker(this.value)" onchange="_selConId=null;actualizarNIFPedido()">
+          <input type="text" id="i-cli" placeholder="👤 Pulsa para elegir un cliente de Contactos" readonly style="flex:1;cursor:pointer;background:#fff" onclick="toggleConPicker(event)">
           <button type="button" class="btn sm" onclick="toggleConPicker(event)" title="Seleccionar contacto" style="flex-shrink:0">👤</button>
         </div>
         <datalist id="cli-list"></datalist>
@@ -388,6 +388,7 @@ tr:hover td{background:var(--bg2)}
           <div class="con-picker-list" id="con-picker-list"></div>
         </div>
       </div>
+      <div id="ped-ficha-aviso" class="fgf" style="display:none"></div>
       <div class="fl"><label>NIF / CIF / VAT</label><input type="text" id="i-nif" placeholder="B12345678 · FR12345… · DE123…" style="text-transform:uppercase" oninput="pintarAvisoNIF('i-nif','pnif-hint')"><div id="pnif-hint" style="font-size:11px;margin-top:3px;line-height:1.35"></div></div>
       <div class="fl fgf">
         <label>Dirección de entrega</label>
@@ -691,7 +692,7 @@ function actualizarNIFPedido(){
   const inp=document.getElementById('i-nif');if(!inp)return;
   const p=_editPedId?DB.pedidos.find(x=>x.id===_editPedId):null;
   const nom=document.getElementById('i-cli').value;
-  const c=(_selConId&&DB.contactos.find(x=>x.id===_selConId&&mismoCliente(x.nombre,nom)))||DB.contactos.find(x=>mismoCliente(x.nombre,nom));
+  const c=_selConId?(DB.contactos.find(x=>x.id===_selConId)||null):null;
   let extra='';
   _pedNifBloqueado=false;
   if(p&&p.nif&&(p.factura||'').trim()){
@@ -706,6 +707,7 @@ function actualizarNIFPedido(){
   inp.readOnly=_pedNifBloqueado;
   inp.style.background=_pedNifBloqueado?'#f3efe9':'';
   pintarAvisoNIF('i-nif','pnif-hint',extra);
+  renderAvisoFicha(c);
 }
 // Contacto: un NIF guardado queda bloqueado; cambiarlo pide confirmación (y PIN si existe)
 let _conNifOrig='';
@@ -719,6 +721,24 @@ function desbloquearNIFContacto(){
     if(!confirm('⚠️ Vas a cambiar el NIF '+_conNifOrig+'.\n\nLos pedidos ya facturados conservarán el NIF antiguo y el cambio quedará registrado en el historial de NIF.\n\n¿Continuar?'))return;
     _bloquearNIFContacto(false);document.getElementById('i-cnif').focus();
   });
+}
+
+// ─── Datos obligatorios de cliente ───────────────────────────────────────────
+function faltasContacto(c){const f=[];if(!validarNIF(c.nif).ok)f.push(c.nif?'NIF válido':'NIF');if(!(c.direccion||'').trim()&&!getDirecciones(c).some(d=>(d.direccion||'').trim()))f.push('dirección');return f;}
+function faltasPedido(p){const c=contactoDePedido(p);const f=[];if(!c)f.push('ficha de contacto');const nif=p.nif||c?.nif;if(!validarNIF(nif).ok)f.push(nif?'NIF válido':'NIF');if(!(p.dir_entrega||'').trim())f.push('dirección de entrega');return f;}
+function renderAvisoFicha(c){
+  const el=document.getElementById('ped-ficha-aviso');if(!el)return;
+  el.style.display='';
+  if(!c){el.innerHTML='<div style="background:var(--wn-bg);border:1px solid var(--wn-brd);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--wn-txt)">👤 Elige el cliente de <strong>Contactos</strong>. Si no existe, créalo desde el mismo selector («+ Crear contacto nuevo»).</div>';return;}
+  const f=faltasContacto(c);
+  if(!f.length){el.innerHTML='<div style="background:var(--ok-bg);border:1px solid var(--ok-brd);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--ok-txt)">✅ Ficha del cliente completa (NIF y dirección)</div>';return;}
+  el.innerHTML=`<div style="background:var(--al-bg);border:1px solid var(--al-brd);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--al-txt);display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="flex:1">⚠️ A la ficha de <strong>${c.nombre}</strong> le falta: <strong>${f.join(', ')}</strong>. El pedido se puede guardar, pero <strong>no se podrá enviar</strong> hasta completarlo.</span><button type="button" class="btn sm" onclick="abrirContactoDesdePedido(${c.id})">✏️ Completar ficha</button></div>`;
+}
+let _conDesdePedido=false;
+function abrirContactoDesdePedido(id){
+  document.getElementById('con-picker')?.classList.remove('open');
+  _conDesdePedido=true;
+  openContacto(id||null,id?null:{tipo:'cliente'});
 }
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
@@ -746,7 +766,7 @@ function mismoCliente(a,b){const na=normNom(a);return !!na&&na===normNom(b);}
 function pedidosDeContacto(c){return DB.pedidos.filter(p=>p.contacto_id?p.contacto_id===c.id:mismoCliente(p.cliente,c.nombre));}
 function contactoDePedido(p){return (p.contacto_id&&DB.contactos.find(c=>c.id===p.contacto_id))||DB.contactos.find(c=>mismoCliente(c.nombre,p.cliente))||null;}
 function fd(d){if(!d)return '';try{const[y,m,dd]=d.split('-');return dd+'/'+m+'/'+y;}catch{return d;}}
-function closeModal(){['pedov','stkov','movov','conov','setov','iaov'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});}
+function closeModal(){if(_conDesdePedido&&document.getElementById('conov').style.display!=='none'){document.getElementById('conov').style.display='none';_conDesdePedido=false;return;}['pedov','stkov','movov','conov','setov','iaov'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 
 function showPage(n){
@@ -985,7 +1005,7 @@ function rPedidos(){
       <td><span class="pbdg pbdg-${proc.cls}">${proc.label}</span></td>
       <td>${fd(p.fecha_pedido)}</td>
       <td>${p.fecha_prevista?`<span style="color:var(--pri-h);font-weight:500">${fd(p.fecha_prevista)}</span>`:'—'}</td>
-      <td style="font-weight:500">${p.cliente||'—'}${!validarNIF(p.nif).ok?` <span class="pbdg" style="background:var(--al-bg);color:var(--al-txt);font-size:10px;padding:1px 7px">${validarNIF(p.nif).vacio?'⚠️ Sin NIF':'❌ NIF?'}</span>`:''}</td>
+      <td style="font-weight:500">${p.cliente||'—'}${faltasPedido(p).length?` <span class="pbdg" style="background:var(--al-bg);color:var(--al-txt);font-size:10px;padding:1px 7px" title="Falta: ${faltasPedido(p).join(', ')}">⚠️ Falta ${faltasPedido(p).map(x=>x.split(' ')[0]).join(' + ')}</span>`:''}</td>
       <td style="color:var(--txt2);font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.dir_entrega||'—'}</td>
       <td>${pedidoCell(p)}</td>
       <td style="text-align:center;font-weight:600">${tc||'—'}</td>
@@ -1016,7 +1036,7 @@ function rPedidos(){
       <div class="vcard-head">
         <div>
           <div style="font-size:10px;font-weight:700;color:var(--pri);letter-spacing:.3px;margin-bottom:2px">${genId(p)}</div>
-          <div class="vcard-cliente">${p.cliente||'—'}${!validarNIF(p.nif).ok?` <span class="pbdg" style="background:var(--al-bg);color:var(--al-txt);font-size:10px;padding:1px 7px">${validarNIF(p.nif).vacio?'⚠️ Sin NIF':'❌ NIF?'}</span>`:''}</div>
+          <div class="vcard-cliente">${p.cliente||'—'}${faltasPedido(p).length?` <span class="pbdg" style="background:var(--al-bg);color:var(--al-txt);font-size:10px;padding:1px 7px" title="Falta: ${faltasPedido(p).join(', ')}">⚠️ Falta ${faltasPedido(p).map(x=>x.split(' ')[0]).join(' + ')}</span>`:''}</div>
           <span class="pbdg pbdg-${proc.cls}" style="margin-top:4px;display:inline-flex">${proc.label}</span>
         </div>
         <div class="vcard-actions">
@@ -1052,14 +1072,15 @@ function toggleConPicker(e){
   document.getElementById('con-picker-q').focus();
 }
 function renderConPicker(q){
-  const ql=q.toLowerCase();
+  const ql=normNom(q);
   const list=document.getElementById('con-picker-list');if(!list)return;
-  const clientes=DB.contactos.filter(c=>c.tipo!=='proveedor').filter(c=>!ql||[c.nombre,c.persona,c.nif].some(v=>(v||'').toLowerCase().includes(ql)));
-  if(!clientes.length){list.innerHTML='<div style="padding:12px;text-align:center;font-size:12px;color:var(--txt2)">Sin resultados</div>';return;}
-  list.innerHTML=clientes.map(c=>`<div class="con-pick-item" tabindex="0" onclick="selectContactoPedido(${c.id})" onkeydown="if(event.key==='Enter')selectContactoPedido(${c.id})">
-    <div class="cp-name">${c.nombre}${c.persona?` <span style="font-weight:400;color:var(--txt2)">· ${c.persona}</span>`:''}</div>
-    <div class="cp-sub">${[c.tipo==='cliente'?'🛒 Cliente':'📦 Proveedor',c.nif,c.direccion].filter(Boolean).join(' · ')}</div>
-  </div>`).join('');
+  const clientes=DB.contactos.filter(c=>c.tipo!=='proveedor').filter(c=>!ql||[c.nombre,c.persona,c.nif].some(v=>normNom(v).includes(ql))).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||''));
+  const crear=`<div class="con-pick-item" tabindex="0" onclick="abrirContactoDesdePedido(null)" style="background:var(--pri-l)"><div class="cp-name" style="color:var(--pri)">+ Crear contacto nuevo</div><div class="cp-sub">Si el cliente aún no está en Contactos</div></div>`;
+  if(!clientes.length){list.innerHTML=crear+'<div style="padding:12px;text-align:center;font-size:12px;color:var(--txt2)">Sin resultados</div>';return;}
+  list.innerHTML=crear+clientes.map(c=>{const f=faltasContacto(c);return `<div class="con-pick-item" tabindex="0" onclick="selectContactoPedido(${c.id})" onkeydown="if(event.key==='Enter')selectContactoPedido(${c.id})">
+    <div class="cp-name">${c.nombre}${c.persona?` <span style="font-weight:400;color:var(--txt2)">· ${c.persona}</span>`:''}${f.length?` <span style="color:var(--al-txt);font-size:10px;font-weight:600">⚠️ falta ${f.join(', ')}</span>`:''}</div>
+    <div class="cp-sub">${[c.nif,c.direccion].filter(Boolean).join(' · ')||'Sin datos'}</div>
+  </div>`;}).join('');
 }
 function filterConPicker(q){
   const p=document.getElementById('con-picker');if(!p)return;
@@ -1162,9 +1183,11 @@ async function savePedido(){
     importe:parseFloat(document.getElementById('i-imp').value)||0,
     cobro:document.getElementById('i-cob').value,
   };
-  const _cSel=(_selConId&&DB.contactos.find(c=>c.id===_selConId&&mismoCliente(c.nombre,obj.cliente)))||DB.contactos.find(c=>mismoCliente(c.nombre,obj.cliente));
-  obj.contacto_id=_cSel?_cSel.id:null;
-  if(!obj.cliente){alert('El cliente es obligatorio');return;}
+  const _cSel=_selConId?(DB.contactos.find(c=>c.id===_selConId)||null):null;
+  if(!_cSel){alert('👤 Elige el cliente desde Contactos (botón 👤).\n\nSi el cliente no existe, créalo con «+ Crear contacto nuevo» dentro del selector.');return;}
+  obj.contacto_id=_cSel.id;
+  obj.cliente=_cSel.nombre;
+  if(!obj.dir_entrega) obj.dir_entrega=(_cSel.direccion||'').trim();
   obj.nif=limpiaNIF(obj.nif);
   {
     const ant=_editPedId?DB.pedidos.find(x=>x.id===_editPedId):null;
@@ -1173,10 +1196,11 @@ async function savePedido(){
     else if(_cSel&&_cSel.nif) obj.nif=limpiaNIF(_cSel.nif);
     const v=validarNIF(obj.nif);
     if(v.vacio){
-      if(!confirm('⚠️ Este pedido no tiene NIF/CIF.\n\nPuedes guardarlo igualmente y añadirlo más tarde.\n\n¿Guardar sin NIF?'))return;
+      if(!confirm('⚠️ Este pedido no tiene NIF/CIF (falta en la ficha de '+obj.cliente+').\n\nSe puede guardar, pero NO se podrá enviar hasta añadir el NIF.\n\n¿Guardar igualmente?'))return;
     } else if(!v.ok){
       if(!confirm('⚠️ El NIF «'+obj.nif+'» parece incorrecto: '+v.msg+'.\n\n¿Guardar igualmente?'))return;
     }
+    if(!obj.dir_entrega&&!confirm('⚠️ Este pedido no tiene dirección de entrega.\n\nSe puede guardar, pero NO se podrá enviar hasta añadirla.\n\n¿Guardar igualmente?'))return;
   }
   showLoading('Guardando...');
   // Función que reintenta sin campos extra si Supabase no tiene las columnas aún
@@ -1220,7 +1244,6 @@ async function savePedido(){
   hideLoading();closeModal();rPedidos();rStock();rAlertas();updateAlertBadge();_autoRefreshHistorial();
   logActividad('pedido',(_editPedId?'Pedido actualizado':'Nuevo pedido')+': '+obj.cliente+(obj.cajas?' · '+obj.cajas+' cajas':''));
   _autoSyncContacto(obj);
-  if(!obj.contacto_id) showToast({tipo:'contacto',mensaje:'Pedido guardado. «'+obj.cliente+'» no tiene ficha de contacto: puedes crearla desde Contactos.'});
   return obj.id;
 }
 
@@ -1262,11 +1285,15 @@ function delPedidoEdit(){if(_editPedId)delPedido(_editPedId);}
 function getWAPhone(){return localStorage.getItem('shi_wa_phone')||'';}
 function sendWA(id,sinAviso=false){
   const p=DB.pedidos.find(x=>x.id===id);if(!p)return;
-  if(!sinAviso){
-    const v=validarNIF(p.nif);
-    if(v.vacio&&!confirm('⚠️ Este pedido no tiene NIF/CIF.\n\n¿Enviar el WhatsApp igualmente?'))return;
-    if(!v.vacio&&!v.ok&&!confirm('⚠️ El NIF «'+p.nif+'» parece incorrecto: '+v.msg+'.\n\n¿Enviar igualmente?'))return;
-  }
+  const _c0=contactoDePedido(p);
+  const _nif=limpiaNIF(p.nif||_c0?.nif||'');
+  const _v=validarNIF(_nif);
+  const _falta=[];
+  if(!_c0)_falta.push('• El cliente no tiene ficha en Contactos');
+  if(_v.vacio)_falta.push('• Falta el NIF/CIF');
+  if(!(p.dir_entrega||'').trim())_falta.push('• Falta la dirección de entrega');
+  if(_falta.length){alert('⛔ No se puede enviar el pedido de '+(p.cliente||'—')+':\n\n'+_falta.join('\n')+'\n\nCompleta los datos y vuelve a intentarlo.');openPedido(id);return;}
+  if(!sinAviso&&!_v.ok&&!confirm('⚠️ El NIF «'+_nif+'» parece incorrecto: '+_v.msg+'.\n\n¿Enviar igualmente?'))return;
   const proc=getProceso(p);
   const ls=getLineas(p).filter(l=>l.producto);
   const sep='━━━━━━━━━━━━━━━━━━━━━';
@@ -1279,7 +1306,7 @@ function sendWA(id,sinAviso=false){
     '',
     `👤 *Cliente:* ${p.cliente||'—'}`,
   ];
-  if(p.nif) partes.push(`🪪 *NIF/CIF:* ${p.nif}`);
+  partes.push(`🪪 *NIF/CIF:* ${_nif}`);
   const _con=contactoDePedido(p);
   if(_con?.persona) partes.push(`👤 *Persona de contacto:* ${_con.persona}`);
   if(_con?.telefono) partes.push(`📞 *Teléfono:* ${_con.telefono}`);
@@ -1860,10 +1887,15 @@ function rAlertas(){
   const p3=DB.pedidos.filter(p=>getProceso(p).step===3);
   const p4=DB.pedidos.filter(p=>getProceso(p).step===4);
   let html='';
-  const sinNif=DB.pedidos.filter(p=>!validarNIF(p.nif).ok);
-  if(sinNif.length){
-    html+=`<div class="sec-title">🪪 Pedidos sin NIF o con NIF dudoso (${sinNif.length})</div>`;
-    html+=sinNif.map(p=>`<div class="alert-item wn"><div style="flex:1"><strong>${p.cliente||'—'}</strong><div style="font-size:11px;color:var(--wn-txt)">${p.nif?'NIF «'+p.nif+'»: '+validarNIF(p.nif).msg:'Sin NIF'} · ${fd(p.fecha_pedido)}</div></div><button class="btn sm" onclick="openPedido(${p.id})">✏️</button></div>`).join('');
+  const incompletos=DB.pedidos.filter(p=>faltasPedido(p).length);
+  if(incompletos.length){
+    html+=`<div class="sec-title">⛔ Pedidos que no se pueden enviar (${incompletos.length})</div>`;
+    html+=incompletos.map(p=>`<div class="alert-item urg"><div style="flex:1"><strong>${p.cliente||'—'}</strong><div style="font-size:11px;color:var(--al-txt)">Falta: ${faltasPedido(p).join(', ')} · ${fd(p.fecha_pedido)}</div></div><button class="btn sm" onclick="openPedido(${p.id})">✏️</button></div>`).join('');
+  }
+  const fichasInc=DB.contactos.filter(c=>c.tipo!=='proveedor'&&faltasContacto(c).length);
+  if(fichasInc.length){
+    html+=`<div class="sec-title" style="margin-top:16px">👥 Fichas de cliente incompletas (${fichasInc.length})</div>`;
+    html+=fichasInc.map(c=>`<div class="alert-item wn"><div style="flex:1"><strong>${c.nombre}</strong><div style="font-size:11px;color:var(--wn-txt)">Falta: ${faltasContacto(c).join(', ')}</div></div><button class="btn sm" onclick="openContacto(${c.id})">✏️</button></div>`).join('');
   }
   if(stockBajo.length){
     html+=`<div class="sec-title">⚠️ Stock bajo mínimo (${stockBajo.length})</div>`;
@@ -2041,8 +2073,13 @@ async function saveContacto(){
   {
     const v=validarNIF(obj.nif);
     if(!v.vacio&&!v.ok&&!confirm('⚠️ El NIF «'+obj.nif+'» parece incorrecto: '+v.msg+'.\n\n¿Guardar igualmente?'))return;
+    const dupNom=DB.contactos.find(c=>c.id!==_editConId&&normNom(c.nombre)===normNom(obj.nombre));
+    if(dupNom){alert('❌ Ya existe un contacto llamado «'+dupNom.nombre+'».\n\nNo se pueden crear contactos duplicados: usa el que ya existe.');return;}
     const dup=obj.nif&&DB.contactos.find(c=>c.id!==_editConId&&limpiaNIF(c.nif)===obj.nif);
-    if(dup&&!confirm('⚠️ El NIF '+obj.nif+' ya está en la ficha «'+dup.nombre+'». Puede ser un contacto duplicado.\n\n¿Guardar igualmente?'))return;
+    if(dup&&!_editConId){alert('❌ El NIF '+obj.nif+' ya pertenece a «'+dup.nombre+'».\n\nNo se puede crear otro contacto con el mismo NIF: usa el que ya existe.');return;}
+    if(dup&&!confirm('⚠️ El NIF '+obj.nif+' también está en la ficha «'+dup.nombre+'». Puede ser un contacto duplicado.\n\n¿Guardar igualmente?'))return;
+    if(obj.tipo==='cliente'){const f=faltasContacto({...obj,direcciones_envio:obj.direcciones_envio});
+      if(f.length&&!confirm('⚠️ A este cliente le falta: '+f.join(', ')+'.\n\nSe puede guardar, pero sus pedidos NO se podrán enviar hasta completarlo.\n\n¿Guardar igualmente?'))return;}
   }
   showLoading('Guardando...');
   if(_editConId){
@@ -2055,7 +2092,9 @@ async function saveContacto(){
     if(r.id)obj.id=r.id;
     DB.contactos.push(obj);DB.nid.c=Math.max(DB.nid.c,obj.id+1);
   }
+  const _volver=_conDesdePedido;
   hideLoading();closeModal();rContactos();
+  if(_volver)selectContactoPedido(obj.id);
   logActividad('contacto',(_editConId?'Contacto actualizado':'Nuevo contacto')+': '+obj.nombre+(obj.nif?' ('+obj.nif+')':''));
   _autoSyncPedidosDesdeContacto(obj);
 }
@@ -2069,14 +2108,19 @@ async function _autoSyncPedidosDesdeContacto(contacto){
     if(!p.nif&&contacto.nif){updated.nif=contacto.nif;changed=true;}
     if(!p.dir_entrega&&contacto.direccion){updated.dir_entrega=contacto.direccion;changed=true;}
     if(!p.contacto_id&&contacto.id){updated.contacto_id=contacto.id;changed=true;}
+    if(p.cliente!==contacto.nombre){updated.cliente=contacto.nombre;changed=true;}
     if(!changed)continue;
     const r=await sbUpdate('pedidos_shirake',p.id,updated);
     if(!r||r.__error__)continue;
     Object.assign(p,updated);
   }
+  rPedidos();rAlertas();
 }
 
 async function delContacto(id){
+  const _c=DB.contactos.find(x=>x.id===id);
+  const _np=_c?pedidosDeContacto(_c).length:0;
+  if(_np){alert('❌ No se puede eliminar «'+_c.nombre+'»: tiene '+_np+' pedido(s).\n\nPuedes editar sus datos, pero no borrarlo.');return;}
   if(!confirm('¿Eliminar este contacto?'))return;
   showLoading('Eliminando...');
   await sbDelete('contactos_shirake',id);
